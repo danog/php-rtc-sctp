@@ -1,4 +1,4 @@
-<?php
+<?php declare(strict_types=1);
 
 /**
  * This file is part of the PHP WebRTC package.
@@ -35,7 +35,7 @@ class SctpUtility
      */
     public static function chunkType(object $chunk): string
     {
-        return get_class($chunk);
+        return $chunk::class;
     }
 
     /**
@@ -56,7 +56,7 @@ class SctpUtility
     {
         $params = [];
         $pos = 0;
-        $length = strlen($body);
+        $length = \strlen($body);
 
         while ($pos <= $length - 4) {
             $paramType = unpack("n", substr($body, $pos, 2))[1];
@@ -88,7 +88,7 @@ class SctpUtility
         $body = "";
         $padding = "";
         foreach ($params as [$paramType, $paramValue]) {
-            $paramLength = strlen($paramValue) + 4;
+            $paramLength = \strlen($paramValue) + 4;
             $body .= $padding;
             $body .= pack("nn", $paramType, $paramLength) . $paramValue;
             $padding = str_repeat("\x00", self::padl($paramLength));
@@ -186,8 +186,8 @@ class SctpUtility
         }
 
         $crc = 0xFFFFFFFF;
-        for ($i = 0, $len = strlen($data); $i < $len; $i++) {
-            $crc = $table[($crc ^ ord($data[$i])) & 0xFF] ^ ($crc >> 8);
+        for ($i = 0, $len = \strlen($data); $i < $len; $i++) {
+            $crc = $table[($crc ^ \ord($data[$i])) & 0xFF] ^ ($crc >> 8);
         }
 
         return $crc ^ 0xFFFFFFFF;

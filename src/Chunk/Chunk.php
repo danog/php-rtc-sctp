@@ -1,4 +1,4 @@
-<?php
+<?php declare(strict_types=1);
 
 /**
  * This file is part of the PHP WebRTC package.
@@ -50,7 +50,7 @@ class Chunk implements ChunkInterface
     {
         $body = $this->getBody();
 
-        $length = strlen($body) + 4;
+        $length = \strlen($body) + 4;
         $data = pack("CCn", $this->type, $this->flags, $length) . $body;
         $data .= str_repeat("\x00", SctpUtility::padl($length));
         return $data;
@@ -66,51 +66,31 @@ class Chunk implements ChunkInterface
         return sprintf("%s(flags=%d)", SctpUtility::chunkType($this), $this->flags);
     }
 
-    /**
-     * @return AttributeChunk
-     */
     public function getAttributes(): AttributeChunk
     {
         return $this->attributes;
     }
 
-    /**
-     * @return int
-     */
     public function getType(): int
     {
         return $this->type;
     }
 
-    /**
-     * @return string
-     */
     public function getBody(): string
     {
         return $this->body;
     }
 
-    /**
-     * @param string $body
-     * @return void
-     */
     public function setBody(string $body): void
     {
         $this->body = $body;
     }
 
-    /**
-     * @return int
-     */
     public function getFlags(): int
     {
         return $this->flags;
     }
 
-    /**
-     * @param int $flags
-     * @return void
-     */
     public function setFlags(int $flags): void
     {
         $this->flags = $flags;

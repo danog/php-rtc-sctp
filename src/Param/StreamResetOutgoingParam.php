@@ -1,4 +1,4 @@
-<?php
+<?php declare(strict_types=1);
 
 /**
  * This file is part of the PHP WebRTC package.
@@ -29,8 +29,7 @@ readonly class StreamResetOutgoingParam implements StreamParamInterface
         private int   $responseSequence,
         private int   $lastTsn,
         private array $streams = []
-    )
-    {
+    ) {
     }
 
     /**
@@ -57,7 +56,7 @@ readonly class StreamResetOutgoingParam implements StreamParamInterface
     {
         $unpacked = unpack("NrequestSequence/NresponseSequence/NlastTsn", substr($data, 0, 12));
         $streams = [];
-        for ($pos = 12; $pos < strlen($data); $pos += 2) {
+        for ($pos = 12; $pos < \strlen($data); $pos += 2) {
             $streams[] = unpack("n", substr($data, $pos, 2))[1];
         }
         return new self(
@@ -68,41 +67,26 @@ readonly class StreamResetOutgoingParam implements StreamParamInterface
         );
     }
 
-    /**
-     * @return array
-     */
     public function getStreams(): array
     {
         return $this->streams;
     }
 
-    /**
-     * @return int
-     */
     public function getRequestSequence(): int
     {
         return $this->requestSequence;
     }
 
-    /**
-     * @return int
-     */
     public function getResponseSequence(): int
     {
         return $this->responseSequence;
     }
 
-    /**
-     * @return int
-     */
     public function getLastTsn(): int
     {
         return $this->lastTsn;
     }
 
-    /**
-     * @return string
-     */
     public function __toString(): string
     {
         return sprintf(
@@ -110,7 +94,7 @@ readonly class StreamResetOutgoingParam implements StreamParamInterface
             $this->requestSequence,
             $this->responseSequence,
             $this->lastTsn,
-            count($this->streams)
+            \count($this->streams)
         );
     }
 }

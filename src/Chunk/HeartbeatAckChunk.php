@@ -1,4 +1,4 @@
-<?php
+<?php declare(strict_types=1);
 
 /**
  * This file is part of the PHP WebRTC package.
@@ -19,4 +19,3 @@ class HeartbeatAckChunk extends BaseParamsChunk
     /** @var int Chunk type identifier. */
     protected int $type = 5;
 }
-

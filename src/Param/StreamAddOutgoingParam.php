@@ -1,4 +1,4 @@
-<?php
+<?php declare(strict_types=1);
 
 /**
  * This file is part of the PHP WebRTC package.
@@ -25,8 +25,7 @@ readonly class StreamAddOutgoingParam implements StreamParamInterface
     public function __construct(
         private int $requestSequence,
         private int $newStreams
-    )
-    {
+    ) {
     }
 
     /**
@@ -51,25 +50,16 @@ readonly class StreamAddOutgoingParam implements StreamParamInterface
         return new self($unpacked["requestSequence"], $unpacked["newStreams"]);
     }
 
-    /**
-     * @return int
-     */
     public function getNewStreams(): int
     {
         return $this->newStreams;
     }
 
-    /**
-     * @return int
-     */
     public function getRequestSequence(): int
     {
         return $this->requestSequence;
     }
 
-    /**
-     * @return string
-     */
     public function __toString(): string
     {
         return sprintf("StreamAddOutgoingParam requestSequence: %d newStreams: %d", $this->requestSequence, $this->newStreams);

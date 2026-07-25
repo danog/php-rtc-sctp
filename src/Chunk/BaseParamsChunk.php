@@ -1,4 +1,4 @@
-<?php
+<?php declare(strict_types=1);
 
 /**
  * This file is part of the PHP WebRTC package.
@@ -33,28 +33,19 @@ class BaseParamsChunk extends Chunk
         $this->params = $body ? SctpUtility::decodeParams($body) : [];
     }
 
-    /**
-     * @return array
-     */
     public function getParams(): array
     {
         return $this->params;
     }
 
-    /**
-     * @param array $params
-     * @return void
-     */
     public function setParams(array $params): void
     {
         $this->params = $params;
     }
 
     /**
-     * Add params and merge with existing ones
+     * Add params and merge with existing ones.
      *
-     * @param array $param
-     * @return void
      */
     public function addParams(array $param): void
     {
@@ -71,4 +62,3 @@ class BaseParamsChunk extends Chunk
         return SctpUtility::encodeParams($this->params);
     }
 }
-

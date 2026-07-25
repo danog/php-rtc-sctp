@@ -1,4 +1,4 @@
-<?php
+<?php declare(strict_types=1);
 
 /**
  * This file is part of the PHP WebRTC package.
@@ -66,8 +66,8 @@ class SackChunk extends Chunk
      */
     public function encode(): string
     {
-        $length = 16 + 4 * (count($this->gaps) + count($this->duplicates));
-        $data = pack("CCnNNnn", $this->type, $this->flags, $length, $this->cumulativeTsn, $this->advertisedRwnd, count($this->gaps), count($this->duplicates));
+        $length = 16 + 4 * (\count($this->gaps) + \count($this->duplicates));
+        $data = pack("CCnNNnn", $this->type, $this->flags, $length, $this->cumulativeTsn, $this->advertisedRwnd, \count($this->gaps), \count($this->duplicates));
         foreach ($this->gaps as [$start, $end]) {
             $data .= pack("nn", $start, $end);
         }
@@ -86,76 +86,50 @@ class SackChunk extends Chunk
     {
         return sprintf(
             "SackChunk(flags=%d, advertisedRwnd=%d, cumulativeTsn=%d, gaps=%s)",
-            $this->flags, $this->advertisedRwnd, $this->cumulativeTsn, json_encode($this->gaps)
+            $this->flags,
+            $this->advertisedRwnd,
+            $this->cumulativeTsn,
+            json_encode($this->gaps)
         );
     }
 
-    /**
-     * @return int
-     */
     public function getCumulativeTsn(): int
     {
         return $this->cumulativeTsn;
     }
 
-    /**
-     * @param int $cumulativeTsn
-     * @return void
-     */
     public function setCumulativeTsn(int $cumulativeTsn): void
     {
         $this->cumulativeTsn = $cumulativeTsn;
     }
 
-    /**
-     * @return array
-     */
     public function getGaps(): array
     {
         return $this->gaps;
     }
 
-    /**
-     * @param array $gaps
-     * @return void
-     */
     public function setGaps(array $gaps): void
     {
         $this->gaps = $gaps;
     }
 
-    /**
-     * @return int
-     */
     public function getAdvertisedRwnd(): int
     {
         return $this->advertisedRwnd;
     }
 
-    /**
-     * @param int $advertisedRwnd
-     * @return void
-     */
     public function setAdvertisedRwnd(int $advertisedRwnd): void
     {
         $this->advertisedRwnd = $advertisedRwnd;
     }
 
-    /**
-     * @return array
-     */
     public function getDuplicates(): array
     {
         return $this->duplicates;
     }
 
-    /**
-     * @param array $duplicates
-     * @return void
-     */
     public function setDuplicates(array $duplicates): void
     {
         $this->duplicates = $duplicates;
     }
 }
-

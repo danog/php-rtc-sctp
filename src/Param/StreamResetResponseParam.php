@@ -1,4 +1,4 @@
-<?php
+<?php declare(strict_types=1);
 
 /**
  * This file is part of the PHP WebRTC package.
@@ -25,8 +25,7 @@ readonly class StreamResetResponseParam implements StreamParamInterface
     public function __construct(
         private int $responseSequence,
         private int $result
-    )
-    {
+    ) {
     }
 
     /**
@@ -51,17 +50,11 @@ readonly class StreamResetResponseParam implements StreamParamInterface
         return new self($unpacked["responseSequence"], $unpacked["result"]);
     }
 
-    /**
-     * @return int
-     */
     public function getResponseSequence(): int
     {
         return $this->responseSequence;
     }
 
-    /**
-     * @return int
-     */
     public function getResult(): int
     {
         return $this->result;

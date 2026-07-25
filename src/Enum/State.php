@@ -1,4 +1,4 @@
-<?php
+<?php declare(strict_types=1);
 
 /**
  * This file is part of the PHP WebRTC package.
@@ -11,7 +11,8 @@
 
 namespace Webrtc\SCTP\Enum;
 
-enum State: int {
+enum State: int
+{
     case CLOSED = 1;
     case COOKIE_WAIT = 2;
     case COOKIE_ECHOED = 3;

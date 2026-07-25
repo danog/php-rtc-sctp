@@ -1,4 +1,4 @@
-<?php
+<?php declare(strict_types=1);
 
 /**
  * This file is part of the PHP WebRTC package.
@@ -37,7 +37,7 @@ class ForwardTsnChunk extends Chunk
         if ($body) {
             $this->cumulativeTsn = unpack("N", substr($body, 0, 4))[1];
             $pos = 4;
-            while ($pos < strlen($body)) {
+            while ($pos < \strlen($body)) {
                 $this->streams[] = array_values(unpack("nstreamId/nstreamSeq", substr($body, $pos, 4)));
                 $pos += 4;
             }
@@ -69,42 +69,28 @@ class ForwardTsnChunk extends Chunk
     {
         return sprintf(
             "ForwardTsnChunk(cumulativeTsn=%d, streams=%s)",
-            $this->cumulativeTsn, json_encode($this->streams)
+            $this->cumulativeTsn,
+            json_encode($this->streams)
         );
     }
 
-    /**
-     * @return mixed
-     */
     public function getCumulativeTsn(): mixed
     {
         return $this->cumulativeTsn;
     }
 
-    /**
-     * @param mixed $cumulativeTsn
-     * @return void
-     */
     public function setCumulativeTsn(mixed $cumulativeTsn): void
     {
         $this->cumulativeTsn = $cumulativeTsn;
     }
 
-    /**
-     * @return array
-     */
     public function getStreams(): array
     {
         return $this->streams;
     }
 
-    /**
-     * @param array $streams
-     * @return void
-     */
     public function setStreams(array $streams): void
     {
         $this->streams = $streams;
     }
 }
-

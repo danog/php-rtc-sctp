@@ -1,4 +1,4 @@
-<?php
+<?php declare(strict_types=1);
 
 /**
  * This file is part of the PHP WebRTC package.
@@ -11,13 +11,13 @@
 
 namespace Webrtc\SCTP;
 
+use Webrtc\Exception\RuntimeException;
+use Webrtc\SCTP\Chunk\Chunk;
+use Webrtc\SCTP\Enum\State;
 use Psr\Log\LoggerInterface;
 use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
 use React\EventLoop\TimerInterface;
-use Webrtc\Exception\RuntimeException;
-use Webrtc\SCTP\Chunk\Chunk;
-use Webrtc\SCTP\Enum\State;
 
 /**
  * SCTP Timer management class.
@@ -73,8 +73,8 @@ class SctpTimer
             throw new RuntimeException('Task already started');
         }
         $this->chunk = $chunk;
-        $this->log("it started -> chunk: " . get_class($this->chunk));
-        $this->task = $this->loop->addTimer($this->transport->getRto(), fn() => $this->expired());
+        $this->log("it started -> chunk: " . \get_class($this->chunk));
+        $this->task = $this->loop->addTimer($this->transport->getRto(), fn () => $this->expired());
     }
 
     /**
@@ -85,7 +85,7 @@ class SctpTimer
     public function cancel(): void
     {
         if ($this->task) {
-            $this->log("it canceled -> chunk: " . get_class($this->chunk));
+            $this->log("it canceled -> chunk: " . \get_class($this->chunk));
             $this->loop->cancelTimer($this->task);
             $this->task = null;
             $this->chunk = null;
@@ -102,12 +102,12 @@ class SctpTimer
     public function expired(): void
     {
         $this->task = null;
-        $this->log("it expired -> chunk: " . get_class($this->chunk));
+        $this->log("it expired -> chunk: " . \get_class($this->chunk));
         if ($this->failures >= $this->maxTries) {
             $this->transport->setState(State::CLOSED);
         } else {
-            $this->loop->futureTick(fn() => $this->transport->sendChunk($this->chunk));
-            $this->task = $this->loop->addTimer($this->transport->getRto(), fn() => $this->expired());
+            $this->loop->futureTick(fn () => $this->transport->sendChunk($this->chunk));
+            $this->task = $this->loop->addTimer($this->transport->getRto(), fn () => $this->expired());
         }
         $this->failures++;
     }

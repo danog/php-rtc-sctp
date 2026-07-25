@@ -1,4 +1,4 @@
-<?php
+<?php declare(strict_types=1);
 
 /**
  * This file is part of the PHP WebRTC package.
@@ -11,24 +11,14 @@
 
 namespace Webrtc\SCTP\Chunk;
 
-use DateTimeImmutable;
 use Webrtc\Mixin\DataClass;
 
 #[DataClass]
 class AttributeChunk
 {
     /**
-     * Attrs of chunk
+     * Attrs of chunk.
      *
-     * @param int $bookSize
-     * @param float $expiry
-     * @param int|null $maxRetransmits
-     * @param bool $abandoned
-     * @param bool $acked
-     * @param int $misses
-     * @param bool $retransmit
-     * @param int $sentCount
-     * @param float|null $sentTime
      */
     public function __construct(
         public int $bookSize = 0,
@@ -40,7 +30,6 @@ class AttributeChunk
         public bool $retransmit = false,
         public int $sentCount = 0,
         public ?float $sentTime = null,
-    )
-    {
+    ) {
     }
 }

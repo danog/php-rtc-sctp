@@ -1,4 +1,4 @@
-<?php
+<?php declare(strict_types=1);
 
 /**
  * This file is part of the PHP WebRTC package.
@@ -68,7 +68,7 @@ class DataChunk extends Chunk
      */
     public function encode(): string
     {
-        $length = 16 + strlen($this->userData);
+        $length = 16 + \strlen($this->userData);
         $data = pack("CCnNnnN", $this->type, $this->flags, $length, $this->tsn, $this->streamId, $this->streamSeq, $this->protocol) . $this->userData;
         if ($length % 4) {
             $data .= str_repeat("\x00", SctpUtility::padl($length));
@@ -85,90 +85,58 @@ class DataChunk extends Chunk
     {
         return sprintf(
             "DataChunk(flags=%d, tsn=%d, streamId=%d, streamSeq=%d)",
-            $this->flags, $this->tsn, $this->streamId, $this->streamSeq
+            $this->flags,
+            $this->tsn,
+            $this->streamId,
+            $this->streamSeq
         );
     }
 
-    /**
-     * @return int
-     */
     public function getTsn(): int
     {
         return $this->tsn;
     }
 
-    /**
-     * @return int
-     */
     public function getStreamId(): int
     {
         return $this->streamId;
     }
 
-    /**
-     * @param int $streamId
-     * @return void
-     */
     public function setStreamId(int $streamId): void
     {
         $this->streamId = $streamId;
     }
 
-    /**
-     * @return string
-     */
     public function getUserData(): string
     {
         return $this->userData;
     }
 
-    /**
-     * @param string $userData
-     * @return void
-     */
     public function setUserData(string $userData): void
     {
         $this->userData = $userData;
     }
 
-    /**
-     * @param int $tsn
-     * @return void
-     */
     public function setTsn(int $tsn): void
     {
         $this->tsn = $tsn;
     }
 
-    /**
-     * @return int
-     */
     public function getStreamSeq(): int
     {
         return $this->streamSeq;
     }
 
-    /**
-     * @param int $streamSeq
-     * @return void
-     */
     public function setStreamSeq(int $streamSeq): void
     {
         $this->streamSeq = $streamSeq;
     }
 
-    /**
-     * @return int
-     */
     public function getProtocol(): int
     {
         return $this->protocol;
     }
 
-    /**
-     * @param int $protocol
-     * @return void
-     */
     public function setProtocol(int $protocol): void
     {
         $this->protocol = $protocol;

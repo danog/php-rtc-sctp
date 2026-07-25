@@ -1,4 +1,4 @@
-<?php
+<?php declare(strict_types=1);
 
 /**
  * This file is part of the PHP WebRTC package.
@@ -11,12 +11,12 @@
 
 namespace Webrtc\SCTP;
 
-use Generator;
 use Webrtc\Exception\InvalidArgumentException;
 use Webrtc\SCTP\Chunk\DataChunk;
+use Generator;
 
 /**
- * Class InboundStream
+ * Class InboundStream.
  *
  * Handles the reassembly of incoming SCTP (Stream Control Transmission Protocol) DataChunks
  * into complete user messages for a single SCTP stream. This class maintains message order,
@@ -69,8 +69,6 @@ class InboundStream
     /**
      * Checks if the chunk is new and should be appended at the end.
      *
-     * @param DataChunk $chunk
-     * @return bool
      */
     private function isChunkNew(DataChunk $chunk): bool
     {
@@ -86,7 +84,7 @@ class InboundStream
     {
         $pos = 0;
 
-        while ($pos < count($this->reassembly)) {
+        while ($pos < \count($this->reassembly)) {
             $message = $this->processMessageExtraction($pos);
             if ($message !== null) {
                 yield $message;
@@ -107,7 +105,7 @@ class InboundStream
         $startPos = null;
         $expectedTsn = -1;
 
-        while ($pos < count($this->reassembly)) {
+        while ($pos < \count($this->reassembly)) {
             $chunk = $this->reassembly[$pos];
 
             if ($startPos === null) {
@@ -155,8 +153,6 @@ class InboundStream
     /**
      * Checks if a chunk can start a new message.
      *
-     * @param DataChunk $chunk
-     * @return bool
      */
     private function canStartMessage(DataChunk $chunk): bool
     {
@@ -173,11 +169,11 @@ class InboundStream
      */
     private function assembleMessage(int $startPos, int &$pos, DataChunk $chunk): array
     {
-        $userData = implode('', array_map(fn(DataChunk $c) => $c->getUserData(), array_slice($this->reassembly, $startPos, $pos - $startPos + 1)));
+        $userData = implode('', array_map(static fn (DataChunk $c) => $c->getUserData(), \array_slice($this->reassembly, $startPos, $pos - $startPos + 1)));
 
         $this->reassembly = array_merge(
-            array_slice($this->reassembly, 0, $startPos),
-            array_slice($this->reassembly, $pos + 1)
+            \array_slice($this->reassembly, 0, $startPos),
+            \array_slice($this->reassembly, $pos + 1)
         );
 
         if (!($chunk->getFlags() & SctpConstant::SCTP_DATA_UNORDERED) && $chunk->getStreamSeq() === $this->sequenceNumber) {
@@ -202,28 +198,21 @@ class InboundStream
         foreach ($this->reassembly as $i => $chunk) {
             if (SctpUtility::uint32Gte($tsn, $chunk->getTsn())) {
                 $pos = $i;
-                $size += strlen($chunk->getUserData());
+                $size += \strlen($chunk->getUserData());
             } else {
                 break;
             }
         }
 
-        $this->reassembly = array_slice($this->reassembly, $pos + 1);
+        $this->reassembly = \array_slice($this->reassembly, $pos + 1);
         return $size;
     }
 
-    /**
-     * @return int
-     */
     public function getSequenceNumber(): int
     {
         return $this->sequenceNumber;
     }
 
-    /**
-     * @param int $sequenceNumber
-     * @return void
-     */
     public function setSequenceNumber(int $sequenceNumber): void
     {
         $this->sequenceNumber = $sequenceNumber;
