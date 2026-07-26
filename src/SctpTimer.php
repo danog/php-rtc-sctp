@@ -15,9 +15,7 @@ use Webrtc\Exception\RuntimeException;
 use Webrtc\SCTP\Chunk\Chunk;
 use Webrtc\SCTP\Enum\State;
 use Psr\Log\LoggerInterface;
-use React\EventLoop\Loop;
-use React\EventLoop\LoopInterface;
-use React\EventLoop\TimerInterface;
+use Revolt\EventLoop;
 
 /**
  * SCTP Timer management class.
@@ -37,11 +35,8 @@ class SctpTimer
     /** @var Chunk|null The chunk being tracked by this timer */
     private ?Chunk $chunk = null;
 
-    /** @var LoopInterface The event loop instance for timer management */
-    private LoopInterface $loop;
-
-    /** @var TimerInterface|null The active timer instance */
-    private ?TimerInterface $task = null;
+    /** @var string|null Handle of the active timer */
+    private ?string $task = null;
 
     /** @var int Count of failed transmission attempts */
     private int $failures = 0;
@@ -58,7 +53,6 @@ class SctpTimer
         private readonly int              $maxTries,
         private readonly ?LoggerInterface $logger = null
     ) {
-        $this->loop = Loop::get();
     }
 
     /**
@@ -74,7 +68,7 @@ class SctpTimer
         }
         $this->chunk = $chunk;
         $this->log("it started -> chunk: " . \get_class($this->chunk));
-        $this->task = $this->loop->addTimer($this->transport->getRto(), fn () => $this->expired());
+        $this->task = EventLoop::delay($this->transport->getRto(), fn () => $this->expired());
     }
 
     /**
@@ -86,7 +80,7 @@ class SctpTimer
     {
         if ($this->task) {
             $this->log("it canceled -> chunk: " . \get_class($this->chunk));
-            $this->loop->cancelTimer($this->task);
+            EventLoop::cancel($this->task);
             $this->task = null;
             $this->chunk = null;
         }
@@ -106,8 +100,8 @@ class SctpTimer
         if ($this->failures >= $this->maxTries) {
             $this->transport->setState(State::CLOSED);
         } else {
-            $this->loop->futureTick(fn () => $this->transport->sendChunk($this->chunk));
-            $this->task = $this->loop->addTimer($this->transport->getRto(), fn () => $this->expired());
+            EventLoop::queue(fn () => $this->transport->sendChunk($this->chunk));
+            $this->task = EventLoop::delay($this->transport->getRto(), fn () => $this->expired());
         }
         $this->failures++;
     }
@@ -145,9 +139,9 @@ class SctpTimer
     /**
      * Gets the active timer instance.
      *
-     * @return TimerInterface|null The active timer or null if not running
+     * @return string|null Handle of the active timer, or null if not running
      */
-    public function getTask(): ?TimerInterface
+    public function getTask(): ?string
     {
         return $this->task;
     }
@@ -158,9 +152,9 @@ class SctpTimer
      * Note: Generally prefer using start()/cancel() methods rather than
      * manually managing the timer instance.
      *
-     * @param TimerInterface|null $task The timer instance to set
+     * @param string|null $task Handle of the timer to set
      */
-    public function setTask(?TimerInterface $task): void
+    public function setTask(?string $task): void
     {
         $this->task = $task;
     }

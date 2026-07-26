@@ -30,8 +30,7 @@ use Webrtc\SSL\Exception\WantReadException;
 use Webrtc\SSL\Exception\WantWriteException;
 use Webrtc\SSL\Exception\WantX509LookupException;
 use Webrtc\SSL\Exception\ZeroReturnException;
-use React\EventLoop\LoopInterface;
-use React\EventLoop\TimerInterface;
+use Revolt\EventLoop;
 use SplQueue;
 
 /**
@@ -43,8 +42,7 @@ use SplQueue;
  */
 trait DataChannel
 {
-    private ?TimerInterface $dataChannelTask = null;
-    private LoopInterface $loop;
+    private ?string $dataChannelTask = null;
     private ?int $dataChannelId = null;
     /** @var SplQueue<array<RTCDataChannel, int, string>> */
     private SplQueue $dataChannelQueue;
@@ -55,7 +53,7 @@ trait DataChannel
      *  Returns the current data channel timer.
      *
      */
-    public function getDataChannelTask(): ?TimerInterface
+    public function getDataChannelTask(): ?string
     {
         return $this->dataChannelTask;
     }
@@ -86,7 +84,7 @@ trait DataChannel
         $this->ssthresh = max(intdiv($this->cwnd, 2), 4 * SctpConstant::USERDATA_MAX_LENGTH);
         $this->cwnd = SctpConstant::USERDATA_MAX_LENGTH;
 
-        $this->loop->futureTick(fn () => $this->transmit());
+        EventLoop::queue(fn () => $this->transmit());
     }
 
     /**
@@ -97,10 +95,10 @@ trait DataChannel
     {
         $this->log(" Datachannel timer restarted");
         if ($this->dataChannelTask !== null) {
-            $this->loop->cancelTimer($this->dataChannelTask);
+            EventLoop::cancel($this->dataChannelTask);
             $this->dataChannelTask = null;
         }
-        $this->dataChannelTask = $this->loop->addTimer($this->rto, fn () => $this->dataChannelTaskExpired());
+        $this->dataChannelTask = EventLoop::delay($this->rto, fn () => $this->dataChannelTaskExpired());
     }
 
     /**
@@ -114,7 +112,7 @@ trait DataChannel
             throw new RuntimeException("Datachannel timer already started");
         }
         $this->log(" Datachannel timer started");
-        $this->dataChannelTask = $this->loop->addTimer($this->rto, fn () => $this->dataChannelTaskExpired());
+        $this->dataChannelTask = EventLoop::delay($this->rto, fn () => $this->dataChannelTaskExpired());
     }
 
     /**
@@ -124,7 +122,7 @@ trait DataChannel
     {
         if ($this->dataChannelTask !== null) {
             $this->log(" Datachannel timer canceled");
-            $this->loop->cancelTimer($this->dataChannelTask);
+            EventLoop::cancel($this->dataChannelTask);
             $this->dataChannelTask = null;
         }
     }
@@ -293,7 +291,7 @@ trait DataChannel
             $this->reconfigRequestSeq = SctpUtility::tsnPlusOne($this->reconfigRequestSeq);
 
             // Transmit the reconfiguration parameter asynchronously.
-            $this->loop->futureTick(fn () => $this->sendReconfigParam($param));
+            EventLoop::queue(fn () => $this->sendReconfigParam($param));
         }
     }
 
@@ -545,7 +543,7 @@ trait DataChannel
         $data .= $channel->getLabel();
         $data .= $channel->getProtocol();
         $this->dataChannelQueue->enqueue([$channel, SctpConstant::WEBRTC_DCEP, $data]);
-        $this->loop->futureTick(fn () => $this->dataChannelFlush());
+        EventLoop::queue(fn () => $this->dataChannelFlush());
     }
 
     /**
@@ -603,7 +601,7 @@ trait DataChannel
                     pack("C", SctpConstant::DATA_CHANNEL_ACK),
                 ]);
 
-                $this->loop->futureTick(fn () => $this->dataChannelFlush());
+                EventLoop::queue(fn () => $this->dataChannelFlush());
 
                 // Emit event
                 $this->emit("datachannel", [$channel]);

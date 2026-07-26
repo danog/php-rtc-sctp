@@ -7,7 +7,6 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use Random\RandomException;
-use React\Promise\Promise;
 use SplQueue;
 use Symfony\Bridge\PhpUnit\ClockMock;
 use Webrtc\DataChannel\Enum\State as DataChannelState;
@@ -40,8 +39,8 @@ use Webrtc\SCTP\SctpPacket;
 use Webrtc\SCTP\SctpTimer;
 use Webrtc\SCTP\SctpUtility;
 use Webrtc\Stats\enum\TLSState;
-use function React\Async\async;
-use function React\Async\delay;
+use function Amp\async;
+use function Amp\delay;
 
 #[UsesClass(AttributeChunk::class)]
 #[UsesClass(BaseInitChunk::class)]
@@ -154,6 +153,10 @@ class RTCSctpTransportTest extends TestCase
             $client->sendDataStream(...$message);
         }
 
+        // Chunks are sent from their own fibers so timer callbacks are never held up by the
+        // transport, so give the loop a turn before counting what arrived.
+        $this->asyncSleep(.05);
+
         //  Should more than 70% success
         $this->assertGreaterThan(10, count($this->getLatestDataChunk()));
 
@@ -197,6 +200,9 @@ class RTCSctpTransportTest extends TestCase
             16
         );
         $client->sendReconfigParam($param);
+
+        // The reconfiguration is sent from its own fiber, so let the loop deliver it.
+        $this->asyncSleep(.05);
 
         // Verify server's updated stream limits
         $this->assertEquals(272, $server->getMaxChannels());
@@ -450,7 +456,7 @@ class RTCSctpTransportTest extends TestCase
             delay(.1);
             $server->stop();
             $client->stop();
-        })();
+        });
 
         // Attempt to create a second channel with the same ID
         $this->expectException(InvalidArgumentException::class);
@@ -496,7 +502,7 @@ class RTCSctpTransportTest extends TestCase
             delay(.1);
             $server->stop();
             $client->stop();
-        })();
+        });
 
         $this->expectException(InvalidArgumentException::class);
         new RTCDataChannel($client, new RTCDataChannelParameters("chat", negotiated: true));
@@ -602,7 +608,7 @@ class RTCSctpTransportTest extends TestCase
             delay(.1);
             $server->stop();
             $client->stop();
-        })();
+        });
 
         $this->expectException(InvalidArgumentException::class);
         new RTCDataChannel($client, new RTCDataChannelParameters("chat", negotiated: true, id: 100));
@@ -1913,14 +1919,12 @@ class RTCSctpTransportTest extends TestCase
             ->method('stop')
             ->willReturnCallback(function () use ($server) {
                 $server->stop();
-                return new Promise(fn() => null);
             });
 
         $clientDtls->expects($this->any())
             ->method('stop')
             ->willReturnCallback(function () use ($client) {
                 $client->stop();
-                return new Promise(fn() => null);
             });
     }
 

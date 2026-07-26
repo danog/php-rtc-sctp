@@ -52,9 +52,9 @@ use Webrtc\Stats\enum\TLSState;
 use Evenement\EventEmitter;
 use Psr\Log\LoggerInterface;
 use Random\RandomException;
-use React\EventLoop\Loop;
+use Revolt\EventLoop;
 use SplQueue;
-use function React\Async\async;
+use function Amp\async;
 
 /**
  * Class RTCSctpTransport.
@@ -178,7 +178,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
         $this->dataChannelQueue = new SplQueue();
         $this->sentQueue = new SplQueue();
         $this->outboundQueue = new SplQueue();
-        $this->loop = Loop::get();
     }
 
     /**
@@ -372,10 +371,12 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
      */
     public function sendChunk(Chunk $chunk): void
     {
+        // Sending can block on the DTLS transport, and callers include timer callbacks that
+        // must not be held up, so this runs in its own fiber.
         async(function () use ($chunk): void {
             $this->log(sprintf(" Sent chunk %s", $chunk));
             $this->transport->sendData($this->encodeChunk($chunk));
-        })();
+        })->ignore();
     }
 
     /**
