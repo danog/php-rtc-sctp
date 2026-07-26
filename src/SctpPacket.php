@@ -33,7 +33,7 @@ class SctpPacket
      *
      * @var array<int, string> CHUNK_TYPES
      */
-    public const array CHUNK_TYPES = [
+    public const CHUNK_TYPES = [
         0 => "DataChunk",
         1 => "InitChunk",
         2 => "InitAckChunk",

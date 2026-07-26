@@ -73,7 +73,7 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
 {
     use DataChannel;
 
-    private const array RECONFIG_PARAM_TYPES = [
+    private const RECONFIG_PARAM_TYPES = [
         13 => "StreamResetOutgoingParam",
         16 => "StreamResetResponseParam",
         17 => "StreamAddOutgoingParam",

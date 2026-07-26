@@ -24,12 +24,13 @@
         }
     ],
     "require": {
-        "php": "^8.4",
+        "php": "^8.2",
         "quasarstream/exception": "^1.0",
         "quasarstream/sdp": "^1.0",
         "quasarstream/stats": "^1.0",
         "quasarstream/ice": "^1.0",
-        "quasarstream/datachannel": "^1.0"
+        "quasarstream/datachannel": "^1.0",
+        "symfony/polyfill-mbstring": "^1.32"
     },
     "require-dev": {
         "phpunit/php-code-coverage": "11.0.x-dev",
