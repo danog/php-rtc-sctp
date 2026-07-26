@@ -27,7 +27,7 @@ use Revolt\EventLoop;
  * - Manages retransmission timers for reliable chunk delivery
  * - Implements exponential backoff for retransmissions
  * - Tracks retransmission attempts and enforces maximum retry limits
- * - Integrates with ReactPHP event loop for timer management
+ * - Integrates with the Revolt event loop for timer management
  * - Provides logging capabilities for debugging timer operations
  */
 class SctpTimer
