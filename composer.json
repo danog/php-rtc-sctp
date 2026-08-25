@@ -1,7 +1,7 @@
 {
     "name": "danog/php-rtc-sctp",
     "type": "library",
-    "description": "A PHP library implementing SCTP (Stream Control Transmission Protocol) for WebRTC data channels. Fork with FFI made optional and a pure-PHP DTLS/SRTP stack, maintained for MadelineProto.",
+    "description": "SCTP for PHP WebRTC data channels, ported to Amp v3 fibers and timers. MadelineProto's PHP 8.2+ fork is part of the modular danog/php-rtc stack.",
     "keywords": [
         "webrtc",
         "sctp",

@@ -1,9 +1,15 @@
 # SCTP Library for PHP
 
-[![PHP Version](https://img.shields.io/badge/php-%3E%3D8.4-blue.svg)](https://php.net/)
+[![PHP Version](https://img.shields.io/badge/php-%3E%3D8.2-blue.svg)](https://php.net/)
 [![License](https://img.shields.io/badge/license-BSD-blue.svg)](LICENSE)
 
 A PHP library implementing SCTP (Stream Control Transmission Protocol) for WebRTC data channels. This package supports stream multiplexing, retransmissions, congestion control, and reliable or partially reliable data delivery.
+
+## About this fork
+
+This is the `danog/php-rtc-sctp` fork used by MadelineProto. It targets PHP 8.2+ and replaces ReactPHP promises and timers with blocking Amp v3 fiber APIs and Revolt timers. An SCTP association can also run independently of an RTCDataChannel.
+
+The forked stack keeps the upstream `quasarstream/*` dependency constraints for compatibility. Each `danog/php-rtc-*` package replaces its upstream counterpart, so consumers select the complete maintained stack by requiring the corresponding danog packages together.
 
 ##  Features
 
@@ -16,7 +22,7 @@ A PHP library implementing SCTP (Stream Control Transmission Protocol) for WebRT
 
 ## Requirements
 
-- **PHP ≥ 8.4**
+- **PHP ≥ 8.2**
 
 ## Documentation
 
