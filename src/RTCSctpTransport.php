@@ -211,7 +211,7 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
     public function sendSignaling(int $streamId, int $ppId, string $data): void
     {
         if (!$this->isEstablished()) {
-            return;
+            throw new SctpException("SCTP association is not established; cannot send signaling data.");
         }
         $this->sendDataStream($streamId, $ppId, $data);
     }
