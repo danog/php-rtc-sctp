@@ -26,11 +26,11 @@
     "require": {
         "php": "^8.2",
         "amphp/amp": "^3.1",
-        "quasarstream/exception": "^1.0",
-        "quasarstream/sdp": "^1.0",
-        "quasarstream/stats": "^1.0",
-        "quasarstream/ice": "^1.0",
-        "quasarstream/datachannel": "^1.0",
+        "danog/php-rtc-exception": "^1.0",
+        "danog/php-rtc-sdp": "^1.0",
+        "danog/php-rtc-stats": "^1.0",
+        "danog/php-rtc-ice": "^1.0",
+        "danog/php-rtc-datachannel": "^1.0",
         "symfony/polyfill-mbstring": "^1.32"
     },
     "require-dev": {
@@ -49,8 +49,5 @@
             "Tests\\Webrtc\\SCTP\\": "tests"
         }
     },
-    "minimum-stability": "dev",
-    "replace": {
-        "quasarstream/sctp": "self.version"
-    }
+    "minimum-stability": "dev"
 }
