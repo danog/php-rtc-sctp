@@ -20,7 +20,7 @@ A PHP library implementing SCTP (Stream Control Transmission Protocol) for WebRT
 ## Documentation
 
 This package is part of the PHP WebRTC library. For full documentation, examples, and API reference, visit:
-[PHP WebRTC Documentation](https://www.quasarstream.com/php-webrtc)
+[PHP WebRTC Documentation](https://github.com/danog/php-rtc-sctp)
 
 ## Credits
 
