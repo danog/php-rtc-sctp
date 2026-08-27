@@ -40,7 +40,6 @@ jobs:
       - name: Check PHP version and extensions
         run: |
           php -v
-          php -m | grep -i gmp
 
       - name: Run PHPUnit tests
         run: vendor/bin/phpunit
