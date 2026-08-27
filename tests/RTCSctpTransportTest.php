@@ -2,6 +2,7 @@
 
 namespace Tests\Webrtc\SCTP;
 
+use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\MockObject\MockObject;
@@ -65,6 +66,7 @@ use function Amp\delay;
 #[UsesClass(\Webrtc\RTP\Receiver\DecoderQueue::class)]
 #[UsesClass(\Webrtc\RTP\Sender\RTCRtpSender::class)]
 #[CoversClass(RTCSctpTransport::class)]
+#[AllowMockObjectsWithoutExpectations]
 class RTCSctpTransportTest extends TestCase
 {
     private SplQueue $receivedServerQueue;
@@ -1855,41 +1857,28 @@ class RTCSctpTransportTest extends TestCase
 
     private function createDtlsTransportMock(bool $client = false): RTCDtlsTransportMock | MockObject
     {
-        // Create the ICE transport mock
-        $iceTransport = $this->getMockBuilder(RTCIceTransport::class)
-            ->disableOriginalConstructor()
-            ->onlyMethods(['getRole'])
-            ->getMock();
+        // Create the ICE transport stub
+        $iceTransport = $this->createStub(RTCIceTransport::class);
 
-        $iceTransport->expects($this->any())
+        $iceTransport
             ->method('getRole')
             ->willReturn($client ? IceRole::Controlling : IceRole::Controlled);
 
-        // Create the DTLS transport mock
-        $dtlsTransportMock = $this->getMockBuilder(RTCDtlsTransportMock::class)
-            ->disableOriginalConstructor()
-            ->onlyMethods([
-                'getState',
-                'getIceTransport',
-                'setSctpReceiver',
-                'removeSctpReceiver',
-                'sendData',
-                'stop'
-            ])
-            ->getMock();
+        // Create the DTLS transport stub
+        $dtlsTransportMock = $this->createStub(RTCDtlsTransportMock::class);
 
-        $dtlsTransportMock->expects($this->any())
+        $dtlsTransportMock
             ->method('getState')
             ->willReturn(TLSState::CONNECTED);
 
-        $dtlsTransportMock->expects($this->any())
+        $dtlsTransportMock
             ->method('getIceTransport')
             ->willReturn($iceTransport);
 
-        $dtlsTransportMock->expects($this->any())
+        $dtlsTransportMock
             ->method('setSctpReceiver');
 
-        $dtlsTransportMock->expects($this->any())
+        $dtlsTransportMock
             ->method('removeSctpReceiver');
 
         return $dtlsTransportMock;
@@ -1903,7 +1892,7 @@ class RTCSctpTransportTest extends TestCase
     ): void {
         $probability = new Probability($this->lossProbability);
 
-        $serverDtls->expects($this->any())
+        $serverDtls
             ->method('sendData')
             ->willReturnCallback(function (...$args) use ($client, $probability) {
                 if (!$probability->probabilityHappen()) {
@@ -1913,7 +1902,7 @@ class RTCSctpTransportTest extends TestCase
                 return true;
             });
 
-        $clientDtls->expects($this->any())
+        $clientDtls
             ->method('sendData')
             ->willReturnCallback(function (...$args) use ($server, $probability) {
                 if (!$probability->probabilityHappen()) {
@@ -1923,13 +1912,13 @@ class RTCSctpTransportTest extends TestCase
                 return true;
             });
 
-        $serverDtls->expects($this->any())
+        $serverDtls
             ->method('stop')
             ->willReturnCallback(function () use ($server) {
                 $server->stop();
             });
 
-        $clientDtls->expects($this->any())
+        $clientDtls
             ->method('stop')
             ->willReturnCallback(function () use ($client) {
                 $client->stop();
