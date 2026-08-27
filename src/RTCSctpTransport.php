@@ -1069,7 +1069,21 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
     public function receiveChunk(Chunk $chunk): void
     {
         $this->log(sprintf(" Received chunk %s", $chunk));
-        \call_user_func([$this, "receive" . basename(str_replace('\\', '/', $chunk::class))], $chunk);
+        match ($chunk::class) {
+            DataChunk::class => $this->receiveDataChunk($chunk),
+            ForwardTsnChunk::class => $this->receiveForwardTsnChunk($chunk),
+            SackChunk::class => $this->receiveSackChunk($chunk),
+            HeartbeatChunk::class => $this->receiveHeartbeatChunk($chunk),
+            AbortChunk::class => $this->receiveAbortChunk($chunk),
+            ShutdownChunk::class => $this->receiveShutdownChunk($chunk),
+            ShutdownCompleteChunk::class => $this->receiveShutdownCompleteChunk($chunk),
+            ReconfigChunk::class => $this->receiveReconfigChunk($chunk),
+            InitChunk::class => $this->receiveInitChunk($chunk),
+            CookieEchoChunk::class => $this->receiveCookieEchoChunk($chunk),
+            InitAckChunk::class => $this->receiveInitAckChunk($chunk),
+            CookieAckChunk::class => $this->receiveCookieAckChunk($chunk),
+            ErrorChunk::class => $this->receiveErrorChunk($chunk),
+        };
     }
 
     /**
