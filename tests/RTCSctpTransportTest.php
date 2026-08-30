@@ -15,7 +15,7 @@ use Webrtc\DataChannel\RTCDataChannel;
 use Webrtc\DataChannel\RTCDataChannelParameters;
 use Webrtc\Exception\InvalidArgumentException;
 use Webrtc\ICE\Enum\IceRole;
-use Webrtc\ICE\RTCIceTransport;
+use Webrtc\ICE\RTCIceTransportInterface;
 use Webrtc\SCTP\Chunk\AttributeChunk;
 use Webrtc\SCTP\Chunk\BaseInitChunk;
 use Webrtc\SCTP\Chunk\BaseParamsChunk;
@@ -57,14 +57,6 @@ use function Amp\delay;
 #[UsesClass(SctpPacket::class)]
 #[UsesClass(SctpTimer::class)]
 #[UsesClass(SctpUtility::class)]
-#[UsesClass(\Webrtc\AVCodec\Context\Context::class)]
-#[UsesClass(\Webrtc\AVCodec\Frame\AudioFrame::class)]
-#[UsesClass(\Webrtc\AVCodec\Frame\Frame::class)]
-#[UsesClass(\Webrtc\DataChannel\RTCDataChannel::class)]
-#[UsesClass(\Webrtc\DataChannel\RTCDataChannelParameters::class)]
-#[UsesClass(\Webrtc\RTCP\RtcpByePacket::class)]
-#[UsesClass(\Webrtc\RTP\Receiver\DecoderQueue::class)]
-#[UsesClass(\Webrtc\RTP\Sender\RTCRtpSender::class)]
 #[CoversClass(RTCSctpTransport::class)]
 #[AllowMockObjectsWithoutExpectations]
 class RTCSctpTransportTest extends TestCase
@@ -1858,7 +1850,7 @@ class RTCSctpTransportTest extends TestCase
     private function createDtlsTransportMock(bool $client = false): RTCDtlsTransportMock | MockObject
     {
         // Create the ICE transport stub
-        $iceTransport = $this->createStub(RTCIceTransport::class);
+        $iceTransport = $this->createStub(RTCIceTransportInterface::class);
 
         $iceTransport
             ->method('getRole')

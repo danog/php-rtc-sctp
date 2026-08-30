@@ -40,6 +40,7 @@
         "phpunit/phpunit": "^13.0",
         "mockery/mockery": "^1.6",
         "symfony/phpunit-bridge": "7.3.x-dev",
+        "dg/bypass-finals": "dev-master",
         "bamarni/composer-bin-plugin": "^1.9"
     },
     "autoload": {
@@ -53,6 +54,14 @@
         }
     },
     "minimum-stability": "stable",
+    "scripts": {
+        "post-install-cmd": [
+            "@composer bin all install --ansi"
+        ],
+        "post-update-cmd": [
+            "@composer bin all update --ansi"
+        ]
+    },
     "config": {
         "allow-plugins": {
             "bamarni/composer-bin-plugin": true
