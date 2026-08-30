@@ -122,11 +122,26 @@ class RTCSctpTransportTest extends TestCase
         $server->start($client->getPort());
         $client->start($server->getPort());
 
-        // Wait async until to connect or fail
-        $this->asyncSleep(.1);
+        // The client exhausts its INIT retransmissions and closes. That takes
+        // maxTries * RTO, which on coarse-timer platforms (e.g. Windows CI) can
+        // exceed a fixed sleep; wait for the terminal state instead of guessing.
+        $this->waitForState($client, State::CLOSED);
 
         $this->assertEquals(State::CLOSED, $client->getState());
         $this->assertEquals(State::CONNECTING, $server->getState());
+    }
+
+    /**
+     * Advances the event loop until the transport reaches the expected state or
+     * the timeout elapses, so timing-sensitive assertions do not depend on the
+     * platform timer resolution.
+     */
+    private function waitForState(RTCSctpTransport $transport, State $state, float $timeout = 5.0): void
+    {
+        $deadline = \microtime(true) + $timeout;
+        while ($transport->getState() !== $state && \microtime(true) < $deadline) {
+            $this->asyncSleep(.02);
+        }
     }
 
     /**
