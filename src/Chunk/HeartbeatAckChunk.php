@@ -14,7 +14,7 @@ namespace Webrtc\SCTP\Chunk;
 /**
  * Heartbeat Acknowledgment chunk.
  */
-class HeartbeatAckChunk extends BaseParamsChunk
+final class HeartbeatAckChunk extends BaseParamsChunk
 {
     /** @var int Chunk type identifier. */
     protected int $type = 5;

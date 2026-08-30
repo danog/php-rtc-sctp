@@ -12,6 +12,7 @@
 namespace Webrtc\SCTP;
 
 use Random\RandomException;
+use Webrtc\Exception\InvalidArgumentException;
 
 /**
  * SCTP Utility class.
@@ -25,7 +26,7 @@ use Random\RandomException;
  *
  * All methods are static as this is a utility class with no instance state.
  */
-class SctpUtility
+final class SctpUtility
 {
     /**
      * Gets the type/class name of a chunk object.
@@ -59,8 +60,16 @@ class SctpUtility
         $length = \strlen($body);
 
         while ($pos <= $length - 4) {
-            $paramType = unpack("n", substr($body, $pos, 2))[1];
-            $paramLength = unpack("n", substr($body, $pos + 2, 2))[1];
+            $typeData = unpack("n", substr($body, $pos, 2));
+            if ($typeData === false) {
+                throw new InvalidArgumentException("Failed to unpack SCTP parameter type");
+            }
+            $lengthData = unpack("n", substr($body, $pos + 2, 2));
+            if ($lengthData === false) {
+                throw new InvalidArgumentException("Failed to unpack SCTP parameter length");
+            }
+            $paramType = (int) $typeData[1];
+            $paramLength = (int) $lengthData[1];
             $paramValue = substr($body, $pos + 4, $paramLength - 4);
             $params[] = [$paramType, $paramValue];
             $pos += $paramLength + self::padl($paramLength);
@@ -119,7 +128,11 @@ class SctpUtility
      */
     public static function random16(): int
     {
-        return unpack("n", random_bytes(2))[1];
+        $unpacked = unpack("n", random_bytes(2));
+        if ($unpacked === false) {
+            throw new InvalidArgumentException("Failed to unpack random 16-bit value");
+        }
+        return (int) $unpacked[1];
     }
 
     /**
@@ -130,7 +143,11 @@ class SctpUtility
      */
     public static function random32(): int
     {
-        return unpack("N", random_bytes(4))[1];
+        $unpacked = unpack("N", random_bytes(4));
+        if ($unpacked === false) {
+            throw new InvalidArgumentException("Failed to unpack random 32-bit value");
+        }
+        return (int) $unpacked[1];
     }
 
     /**
@@ -170,6 +187,7 @@ class SctpUtility
      */
     public static function crc32c(string $data): int
     {
+        /** @var array<int, int> $table */
         static $table;
         if (!$table) {
             for ($n = 0; $n < 256; $n++) {

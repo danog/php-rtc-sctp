@@ -23,13 +23,6 @@ use Webrtc\SCTP\Enum\State;
 use Webrtc\SCTP\Param\StreamResetOutgoingParam;
 use Webrtc\SCTP\SctpConstant;
 use Webrtc\SCTP\SctpUtility;
-use Webrtc\SSL\Exception\OpenSSLException;
-use Webrtc\SSL\Exception\SSLException;
-use Webrtc\SSL\Exception\SysCallException;
-use Webrtc\SSL\Exception\WantReadException;
-use Webrtc\SSL\Exception\WantWriteException;
-use Webrtc\SSL\Exception\WantX509LookupException;
-use Webrtc\SSL\Exception\ZeroReturnException;
 use Revolt\EventLoop;
 use SplQueue;
 
@@ -44,9 +37,9 @@ trait DataChannel
 {
     private ?string $dataChannelTask = null;
     private ?int $dataChannelId = null;
-    /** @var SplQueue<array<RTCDataChannel, int, string>> */
+    /** @var SplQueue<array{0: RTCDataChannel, 1: int, 2: string}> */
     private SplQueue $dataChannelQueue;
-    /** @var RTCDataChannel[] */
+    /** @var array<int, RTCDataChannel> */
     private array $dataChannels = [];
 
     /**
@@ -132,14 +125,6 @@ trait DataChannel
      * Processes and sends the forward TSN chunk if it exists.
      * If there is no forward TSN chunk, it does nothing.
      * Ensures the data channel task is started if it's not already running.
-     *
-     * @throws OpenSSLException
-     * @throws SSLException
-     * @throws SysCallException
-     * @throws WantReadException
-     * @throws WantWriteException
-     * @throws WantX509LookupException
-     * @throws ZeroReturnException
      */
     private function processForwardTsn(): void
     {
@@ -172,13 +157,6 @@ trait DataChannel
      * from the outbound queue. It ensures that the flight size doesn’t exceed the congestion window (cwnd).
      *
      * @param int $cwnd The current congestion window size.
-     * @throws OpenSSLException
-     * @throws SSLException
-     * @throws SysCallException
-     * @throws WantReadException
-     * @throws WantWriteException
-     * @throws WantX509LookupException
-     * @throws ZeroReturnException
      */
     private function retransmitAndTransmit(int $cwnd): void
     {
@@ -251,14 +229,6 @@ trait DataChannel
      * - Processes the forward TSN chunk.
      * - Calculates the congestion window size (cwnd).
      * - Handles retransmission of chunks and transmits chunks from the outbound queue.
-     *
-     * @throws OpenSSLException
-     * @throws SSLException
-     * @throws SysCallException
-     * @throws WantReadException
-     * @throws WantWriteException
-     * @throws WantX509LookupException
-     * @throws ZeroReturnException
      */
     public function transmit(): void
     {
@@ -325,14 +295,6 @@ trait DataChannel
 
     /**
      * Sends data over the specified stream, fragmenting as needed.
-     *
-     * @throws OpenSSLException
-     * @throws SSLException
-     * @throws SysCallException
-     * @throws WantReadException
-     * @throws WantWriteException
-     * @throws WantX509LookupException
-     * @throws ZeroReturnException
      */
     public function sendDataStream(
         int    $streamId,
@@ -394,12 +356,17 @@ trait DataChannel
             $channel->setReadyState(DataChannelState::Closing);
 
             if ($this->state == State::ESTABLISHED) {
-                $this->reconfigQueue[] = $channel->getId();
+                $id = $channel->getId();
+                if ($id === null) {
+                    throw new RuntimeException("Cannot close a data channel that has no ID");
+                }
+                $this->reconfigQueue[] = $id;
                 if (\count($this->reconfigQueue) == 1) {
                     $this->transmitReconfig();
                 }
 
             } else {
+                /** @var SplQueue<array{0: RTCDataChannel, 1: int, 2: string}> $newQueue */
                 $newQueue = new SplQueue;
 
                 while (!$this->dataChannelQueue->isEmpty()) {
@@ -411,8 +378,9 @@ trait DataChannel
 
                 $this->dataChannelQueue = $newQueue;
 
-                if ($channel->getId() !== null) {
-                    unset($this->dataChannels[$channel->getId()]);
+                $id = $channel->getId();
+                if ($id !== null) {
+                    unset($this->dataChannels[$id]);
                 }
 
                 $channel->setReadyState(DataChannelState::Closed);
@@ -437,14 +405,6 @@ trait DataChannel
     /**
      *
      * Attempts to flush buffered data to the SCTP layer, waiting for the association to be established.
-     *
-     * @throws OpenSSLException
-     * @throws SSLException
-     * @throws SysCallException
-     * @throws WantReadException
-     * @throws WantWriteException
-     * @throws WantX509LookupException
-     * @throws ZeroReturnException
      */
     public function dataChannelFlush(): void
     {
@@ -458,6 +418,9 @@ trait DataChannel
             $streamId = $channel->getId();
             if ($streamId === null) {
                 $streamId = $this->dataChannelId;
+                if ($streamId === null) {
+                    throw new RuntimeException("Cannot assign an ID to a data channel");
+                }
                 while (isset($this->dataChannels[$streamId])) {
                     $streamId += 2;
                 }
@@ -465,24 +428,23 @@ trait DataChannel
                 $channel->setId($streamId);
             }
 
-            if ($channel instanceof RTCDataChannel) {
-                if ($protocol === SctpConstant::WEBRTC_DCEP) {
-                    $this->sendDataStream($streamId, $protocol, $userData);
-                } else {
-                    $expiry = null;
-                    if ($channel->getMaxPacketLifeTime() !== null) {
-                        $expiry = time() + ($channel->getMaxPacketLifeTime() / 1000);
-                    }
-                    $this->sendDataStream(
-                        $streamId,
-                        $protocol,
-                        $userData,
-                        $expiry,
-                        $channel->getMaxRetransmits(),
-                        $channel->getOrdered()
-                    );
-                    $channel->addBufferedAmount(-\strlen($userData));
+            if ($protocol === SctpConstant::WEBRTC_DCEP) {
+                $this->sendDataStream($streamId, $protocol, $userData);
+            } else {
+                $expiry = null;
+                $maxPacketLifeTime = $channel->getMaxPacketLifeTime();
+                if ($maxPacketLifeTime !== null) {
+                    $expiry = (float)time() + ((float)$maxPacketLifeTime / 1000.0);
                 }
+                $this->sendDataStream(
+                    $streamId,
+                    $protocol,
+                    $userData,
+                    $expiry,
+                    $channel->getMaxRetransmits(),
+                    $channel->getOrdered()
+                );
+                $channel->addBufferedAmount(-\strlen($userData));
             }
 
         }
@@ -497,11 +459,15 @@ trait DataChannel
      */
     public function dataChannelAddNegotiated(RTCDataChannel $channel): void
     {
-        if (isset($this->dataChannels[$channel->getId()])) {
-            throw new InvalidArgumentException("Data channel with ID {$channel->getId()} already registered");
+        $id = $channel->getId();
+        if ($id === null) {
+            throw new InvalidArgumentException("Data channel ID is required for negotiated data channels");
+        }
+        if (isset($this->dataChannels[$id])) {
+            throw new InvalidArgumentException("Data channel with ID {$id} already registered");
         }
 
-        $this->dataChannels[$channel->getId()] = $channel;
+        $this->dataChannels[$id] = $channel;
 
         if ($this->state == State::ESTABLISHED) {
             $channel->setReadyState(DataChannelState::Open);
@@ -517,11 +483,12 @@ trait DataChannel
      */
     public function dataChannelOpen(RTCDataChannel $channel): void
     {
-        if ($channel->getId() !== null) {
-            if (isset($this->dataChannels[$channel->getId()])) {
-                throw new InvalidArgumentException("Data channel with ID {$channel->getId()} already registered");
+        $id = $channel->getId();
+        if ($id !== null) {
+            if (isset($this->dataChannels[$id])) {
+                throw new InvalidArgumentException("Data channel with ID {$id} already registered");
             }
-            $this->dataChannels[$channel->getId()] = $channel;
+            $this->dataChannels[$id] = $channel;
 
         }
         $channelType = SctpConstant::DATA_CHANNEL_RELIABLE;
@@ -566,19 +533,25 @@ trait DataChannel
                 }
 
                 $unpacked = unpack("CmsgType/CchannelType/npriority/Nreliability/nlabelLength/nprotocolLength", $data);
+                if ($unpacked === false) {
+                    throw new InvalidArgumentException("Failed to unpack data channel open message");
+                }
                 $pos = 12;
-                $label = substr($data, $pos, $unpacked["labelLength"]);
+                $labelLength = (int) $unpacked["labelLength"];
+                $protocolLength = (int) $unpacked["protocolLength"];
+                $label = substr($data, $pos, $labelLength);
 
-                $pos += $unpacked["labelLength"];
-                $protocol = substr($data, $pos, $unpacked["protocolLength"]);
+                $pos += $labelLength;
+                $protocol = substr($data, $pos, $protocolLength);
 
                 // Determine reliability settings
                 $maxPacketLifeTime = null;
                 $maxRetransmits = null;
-                if (($unpacked["channelType"] & 0x03) === 1) {
-                    $maxRetransmits = $unpacked["reliability"];
-                } elseif (($unpacked["channelType"] & 0x03) === 2) {
-                    $maxPacketLifeTime = $unpacked["reliability"];
+                $channelType = (int) $unpacked["channelType"];
+                if (($channelType & 0x03) === 1) {
+                    $maxRetransmits = (int) $unpacked["reliability"];
+                } elseif (($channelType & 0x03) === 2) {
+                    $maxPacketLifeTime = (int) $unpacked["reliability"];
                 }
 
                 // Register the channel
@@ -586,7 +559,7 @@ trait DataChannel
                     label: $label,
                     maxPacketLifeTime: $maxPacketLifeTime,
                     maxRetransmits: $maxRetransmits,
-                    ordered: ($unpacked["channelType"] & 0x80) === 0,
+                    ordered: ($channelType & 0x80) === 0,
                     protocol: $protocol,
                     id: $streamId
                 );
@@ -632,14 +605,6 @@ trait DataChannel
      *
      * @param RTCDataChannel $channel The channel to send data over.
      * @param string $data The data to send.
-     * @throws OpenSSLException
-     * @throws SSLException
-     * @throws SysCallException
-     * @throws TLSException
-     * @throws WantReadException
-     * @throws WantWriteException
-     * @throws WantX509LookupException
-     * @throws ZeroReturnException
      */
     public function dataChannelSend(RTCDataChannel $channel, string $data): void
     {
@@ -648,7 +613,11 @@ trait DataChannel
             $userData = "\x00";
         } elseif (mb_check_encoding($data, 'UTF-8')) {
             $ppId = SctpConstant::WEBRTC_STRING;
-            $userData = mb_convert_encoding($data, 'UTF-8', 'ISO-8859-1');
+            $converted = mb_convert_encoding($data, 'UTF-8', 'ISO-8859-1');
+            if ($converted === false) {
+                throw new RuntimeException("Failed to convert data channel payload to UTF-8");
+            }
+            $userData = $converted;
         } elseif ($data === "\x00") {
             $ppId = SctpConstant::WEBRTC_BINARY_EMPTY;
             $userData = "\x00";
@@ -670,12 +639,15 @@ trait DataChannel
     public function updateRto(float $rtt): void
     {
         if ($this->srtt === null) {
-            $this->rttvar = $rtt / 2;
+            $this->rttvar = $rtt / 2.0;
             $this->srtt = $rtt;
         } else {
-            $this->rttvar = (1 - SctpConstant::SCTP_RTO_BETA) * $this->rttvar + SctpConstant::SCTP_RTO_BETA * abs($this->srtt - $rtt);
-            $this->srtt = (1 - SctpConstant::SCTP_RTO_ALPHA) * $this->srtt + SctpConstant::SCTP_RTO_ALPHA * $rtt;
+            if ($this->rttvar === null) {
+                $this->rttvar = $rtt / 2.0;
+            }
+            $this->rttvar = (1.0 - (float)SctpConstant::SCTP_RTO_BETA) * $this->rttvar + (float)SctpConstant::SCTP_RTO_BETA * abs($this->srtt - $rtt);
+            $this->srtt = (1.0 - (float)SctpConstant::SCTP_RTO_ALPHA) * $this->srtt + (float)SctpConstant::SCTP_RTO_ALPHA * $rtt;
         }
-        $this->rto = max(SctpConstant::SCTP_RTO_MIN, min($this->srtt + 4 * $this->rttvar, SctpConstant::SCTP_RTO_MAX));
+        $this->rto = max(SctpConstant::SCTP_RTO_MIN, min($this->srtt + 4.0 * $this->rttvar, SctpConstant::SCTP_RTO_MAX));
     }
 }

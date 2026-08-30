@@ -13,7 +13,7 @@ namespace Webrtc\SCTP\Exception;
 
 use Webrtc\Exception\Exception;
 
-class SctpException extends Exception implements SctpExceptionInterface
+final class SctpException extends Exception implements SctpExceptionInterface
 {
 
 }

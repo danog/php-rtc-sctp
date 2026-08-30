@@ -11,6 +11,7 @@
 
 namespace Webrtc\SCTP\Chunk;
 
+use Override;
 use Webrtc\SCTP\SctpUtility;
 
 /**
@@ -18,7 +19,7 @@ use Webrtc\SCTP\SctpUtility;
  */
 class BaseParamsChunk extends Chunk
 {
-    /** @var array List of parameters. */
+    /** @var array<array-key, array{0: int, 1: string}> List of parameters. */
     protected array $params;
 
     /**
@@ -30,14 +31,16 @@ class BaseParamsChunk extends Chunk
     public function __construct(int $flags = 0, ?string $body = null)
     {
         parent::__construct($flags);
-        $this->params = $body ? SctpUtility::decodeParams($body) : [];
+        $this->params = ($body !== null && $body !== "") ? SctpUtility::decodeParams($body) : [];
     }
 
+    /** @return array<array-key, array{0: int, 1: string}> */
     public function getParams(): array
     {
         return $this->params;
     }
 
+    /** @param array<array-key, array{0: int, 1: string}> $params */
     public function setParams(array $params): void
     {
         $this->params = $params;
@@ -46,6 +49,7 @@ class BaseParamsChunk extends Chunk
     /**
      * Add params and merge with existing ones.
      *
+     * @param array<array-key, array{0: int, 1: string}> $param
      */
     public function addParams(array $param): void
     {
@@ -57,6 +61,7 @@ class BaseParamsChunk extends Chunk
      *
      * @return string Encoded body.
      */
+    #[Override]
     public function getBody(): string
     {
         return SctpUtility::encodeParams($this->params);

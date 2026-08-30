@@ -11,6 +11,7 @@
 
 namespace Webrtc\SCTP\Chunk;
 
+use Override;
 use Webrtc\SCTP\SctpUtility;
 
 /**
@@ -46,6 +47,7 @@ class Chunk implements ChunkInterface
      *
      * @return string Binary representation of the chunk.
      */
+    #[Override]
     public function encode(): string
     {
         $body = $this->getBody();
@@ -66,31 +68,37 @@ class Chunk implements ChunkInterface
         return sprintf("%s(flags=%d)", SctpUtility::chunkType($this), $this->flags);
     }
 
+    #[Override]
     public function getAttributes(): AttributeChunk
     {
         return $this->attributes;
     }
 
+    #[Override]
     public function getType(): int
     {
         return $this->type;
     }
 
+    #[Override]
     public function getBody(): string
     {
         return $this->body;
     }
 
+    #[Override]
     public function setBody(string $body): void
     {
         $this->body = $body;
     }
 
+    #[Override]
     public function getFlags(): int
     {
         return $this->flags;
     }
 
+    #[Override]
     public function setFlags(int $flags): void
     {
         $this->flags = $flags;

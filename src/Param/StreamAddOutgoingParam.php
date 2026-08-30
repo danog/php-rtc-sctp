@@ -11,10 +11,13 @@
 
 namespace Webrtc\SCTP\Param;
 
+use Override;
+use Webrtc\Exception\InvalidArgumentException;
+
 /**
  * Represents a Stream Add Outgoing Parameter.
  */
-readonly class StreamAddOutgoingParam implements StreamParamInterface
+readonly final class StreamAddOutgoingParam implements StreamParamInterface
 {
     /**
      * StreamAddOutgoingParam constructor.
@@ -33,6 +36,7 @@ readonly class StreamAddOutgoingParam implements StreamParamInterface
      *
      * @return string Binary representation of the parameter.
      */
+    #[Override]
     public function encode(): string
     {
         return pack("Nnn", $this->requestSequence, $this->newStreams, 0);
@@ -44,10 +48,14 @@ readonly class StreamAddOutgoingParam implements StreamParamInterface
      * @param string $data Binary string to decode.
      * @return StreamAddOutgoingParam Decoded object.
      */
+    #[Override]
     public static function decode(string $data): self
     {
         $unpacked = unpack("NrequestSequence/nnewStreams/nreserved", $data);
-        return new self($unpacked["requestSequence"], $unpacked["newStreams"]);
+        if ($unpacked === false) {
+            throw new InvalidArgumentException("Failed to unpack Stream Add Outgoing parameter");
+        }
+        return new self((int) $unpacked["requestSequence"], (int) $unpacked["newStreams"]);
     }
 
     public function getNewStreams(): int

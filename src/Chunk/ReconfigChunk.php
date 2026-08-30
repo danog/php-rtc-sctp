@@ -14,7 +14,7 @@ namespace Webrtc\SCTP\Chunk;
 /**
  * Reconfiguration chunk.
  */
-class ReconfigChunk extends BaseParamsChunk
+final class ReconfigChunk extends BaseParamsChunk
 {
     /** @var int Chunk type identifier. */
     protected int $type = 130;

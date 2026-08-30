@@ -14,7 +14,7 @@ namespace Webrtc\SCTP\Chunk;
 /**
  * Error chunk.
  */
-class ErrorChunk extends BaseParamsChunk
+final class ErrorChunk extends BaseParamsChunk
 {
     /** @var int Chunk type identifier. */
     protected int $type = 9;

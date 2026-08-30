@@ -11,7 +11,7 @@
 
 namespace Webrtc\SCTP;
 
-class SctpConstant
+final class SctpConstant
 {
     // Local constants
     public const COOKIE_LENGTH = 24;

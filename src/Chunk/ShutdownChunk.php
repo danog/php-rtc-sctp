@@ -11,10 +11,13 @@
 
 namespace Webrtc\SCTP\Chunk;
 
+use Override;
+use Webrtc\Exception\InvalidArgumentException;
+
 /**
  * Shutdown chunk.
  */
-class ShutdownChunk extends Chunk
+final class ShutdownChunk extends Chunk
 {
     /** @var int Chunk type identifier. */
     protected int $type = 7;
@@ -31,8 +34,12 @@ class ShutdownChunk extends Chunk
     public function __construct(int $flags = 0, ?string $body = null)
     {
         parent::__construct($flags);
-        if ($body) {
-            $this->cumulativeTsn = unpack("N", $body)[1];
+        if ($body !== null && $body !== "") {
+            $unpacked = unpack("N", $body);
+            if ($unpacked === false) {
+                throw new InvalidArgumentException("Failed to unpack SHUTDOWN chunk body");
+            }
+            $this->cumulativeTsn = (int) $unpacked[1];
         } else {
             $this->cumulativeTsn = 0;
         }
@@ -43,6 +50,7 @@ class ShutdownChunk extends Chunk
      *
      * @return string Encoded body.
      */
+    #[Override]
     public function getBody(): string
     {
         return pack("N", $this->cumulativeTsn);

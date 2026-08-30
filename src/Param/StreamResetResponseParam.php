@@ -11,10 +11,13 @@
 
 namespace Webrtc\SCTP\Param;
 
+use Override;
+use Webrtc\Exception\InvalidArgumentException;
+
 /**
  * Represents a Stream Reset Response Parameter.
  */
-readonly class StreamResetResponseParam implements StreamParamInterface
+readonly final class StreamResetResponseParam implements StreamParamInterface
 {
     /**
      * StreamResetResponseParam constructor.
@@ -33,6 +36,7 @@ readonly class StreamResetResponseParam implements StreamParamInterface
      *
      * @return string Binary representation of the parameter.
      */
+    #[Override]
     public function encode(): string
     {
         return pack("NN", $this->responseSequence, $this->result);
@@ -44,10 +48,14 @@ readonly class StreamResetResponseParam implements StreamParamInterface
      * @param string $data Binary string to decode.
      * @return StreamResetResponseParam Decoded object.
      */
+    #[Override]
     public static function decode(string $data): self
     {
         $unpacked = unpack("NresponseSequence/Nresult", $data);
-        return new self($unpacked["responseSequence"], $unpacked["result"]);
+        if ($unpacked === false) {
+            throw new InvalidArgumentException("Failed to unpack Stream Reset Response parameter");
+        }
+        return new self((int) $unpacked["responseSequence"], (int) $unpacked["result"]);
     }
 
     public function getResponseSequence(): int

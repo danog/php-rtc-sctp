@@ -11,10 +11,13 @@
 
 namespace Webrtc\SCTP\Param;
 
+use Override;
+use Webrtc\Exception\InvalidArgumentException;
+
 /**
  * Represents a Stream Reset Outgoing Parameter.
  */
-readonly class StreamResetOutgoingParam implements StreamParamInterface
+readonly final class StreamResetOutgoingParam implements StreamParamInterface
 {
     /**
      * StreamResetOutgoingParam constructor.
@@ -22,7 +25,7 @@ readonly class StreamResetOutgoingParam implements StreamParamInterface
      * @param int $requestSequence Request sequence number.
      * @param int $responseSequence Response sequence number.
      * @param int $lastTsn Last Transmission Sequence Number (TSN).
-     * @param array $streams List of streams.
+     * @param array<int> $streams List of streams.
      */
     public function __construct(
         private int   $requestSequence,
@@ -32,11 +35,18 @@ readonly class StreamResetOutgoingParam implements StreamParamInterface
     ) {
     }
 
+    /** @return array<int> */
+    public function getStreams(): array
+    {
+        return $this->streams;
+    }
+
     /**
      * Encodes the parameter into a binary string.
      *
      * @return string Binary representation of the parameter.
      */
+    #[Override]
     public function encode(): string
     {
         $data = pack("NNN", $this->requestSequence, $this->responseSequence, $this->lastTsn);
@@ -52,24 +62,27 @@ readonly class StreamResetOutgoingParam implements StreamParamInterface
      * @param string $data Binary string to decode.
      * @return StreamResetOutgoingParam Decoded object.
      */
+    #[Override]
     public static function decode(string $data): self
     {
         $unpacked = unpack("NrequestSequence/NresponseSequence/NlastTsn", substr($data, 0, 12));
+        if ($unpacked === false) {
+            throw new InvalidArgumentException("Failed to unpack Stream Reset Outgoing parameter");
+        }
         $streams = [];
         for ($pos = 12; $pos < \strlen($data); $pos += 2) {
-            $streams[] = unpack("n", substr($data, $pos, 2))[1];
+            $stream = unpack("n", substr($data, $pos, 2));
+            if ($stream === false) {
+                throw new InvalidArgumentException("Failed to unpack Stream Reset Outgoing stream");
+            }
+            $streams[] = (int) $stream[1];
         }
         return new self(
-            $unpacked["requestSequence"],
-            $unpacked["responseSequence"],
-            $unpacked["lastTsn"],
+            (int) $unpacked["requestSequence"],
+            (int) $unpacked["responseSequence"],
+            (int) $unpacked["lastTsn"],
             $streams
         );
-    }
-
-    public function getStreams(): array
-    {
-        return $this->streams;
     }
 
     public function getRequestSequence(): int

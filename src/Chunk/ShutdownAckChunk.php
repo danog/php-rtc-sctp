@@ -14,7 +14,7 @@ namespace Webrtc\SCTP\Chunk;
 /**
  * Shutdown Acknowledgment chunk.
  */
-class ShutdownAckChunk extends Chunk
+final class ShutdownAckChunk extends Chunk
 {
     /** @var int Chunk type identifier. */
     protected int $type = 8;

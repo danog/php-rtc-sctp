@@ -11,10 +11,13 @@
 
 namespace Webrtc\SCTP\Chunk;
 
+use Override;
+use Webrtc\Exception\InvalidArgumentException;
+
 /**
  * Selective Acknowledgment chunk.
  */
-class SackChunk extends Chunk
+final class SackChunk extends Chunk
 {
     /** @var int Chunk type identifier. */
     protected int $type = 3;
@@ -25,10 +28,10 @@ class SackChunk extends Chunk
     /** @var int Advertised receiver window. */
     protected int $advertisedRwnd;
 
-    /** @var array List of gaps. */
+    /** @var array<array-key, array{0: int, 1: int}> List of gaps. */
     protected array $gaps = [];
 
-    /** @var array List of duplicate TSNs. */
+    /** @var array<int> List of duplicate TSNs. */
     protected array $duplicates = [];
 
     /**
@@ -40,17 +43,28 @@ class SackChunk extends Chunk
     public function __construct(int $flags = 0, ?string $body = null)
     {
         parent::__construct($flags);
-        if ($body) {
+        if ($body !== null && $body !== "") {
             $unpacked = unpack("NcumulativeTsn/NadvertisedRwnd/ngaps/nduplicates", substr($body, 0, 12));
-            $this->cumulativeTsn = $unpacked["cumulativeTsn"];
-            $this->advertisedRwnd = $unpacked["advertisedRwnd"];
+            if ($unpacked === false) {
+                throw new InvalidArgumentException("Failed to unpack SACK chunk body");
+            }
+            $this->cumulativeTsn = (int) $unpacked["cumulativeTsn"];
+            $this->advertisedRwnd = (int) $unpacked["advertisedRwnd"];
             $pos = 12;
-            for ($i = 0; $i < $unpacked["gaps"]; $i++) {
-                $this->gaps[] = array_values(unpack("nstart/nend", substr($body, $pos, 4)));
+            for ($i = 0; $i < (int) $unpacked["gaps"]; $i++) {
+                $gap = unpack("nstart/nend", substr($body, $pos, 4));
+                if ($gap === false) {
+                    throw new InvalidArgumentException("Failed to unpack SACK gap");
+                }
+                $this->gaps[] = [0 => (int) $gap["start"], 1 => (int) $gap["end"]];
                 $pos += 4;
             }
-            for ($i = 0; $i < $unpacked["duplicates"]; $i++) {
-                $this->duplicates[] = unpack("N", substr($body, $pos, 4))[1];
+            for ($i = 0; $i < (int) $unpacked["duplicates"]; $i++) {
+                $dup = unpack("N", substr($body, $pos, 4));
+                if ($dup === false) {
+                    throw new InvalidArgumentException("Failed to unpack SACK duplicate");
+                }
+                $this->duplicates[] = (int) $dup[1];
                 $pos += 4;
             }
         } else {
@@ -64,6 +78,7 @@ class SackChunk extends Chunk
      *
      * @return string Binary representation of the chunk.
      */
+    #[Override]
     public function encode(): string
     {
         $length = 16 + 4 * (\count($this->gaps) + \count($this->duplicates));
@@ -89,7 +104,7 @@ class SackChunk extends Chunk
             $this->flags,
             $this->advertisedRwnd,
             $this->cumulativeTsn,
-            json_encode($this->gaps)
+            (string) json_encode($this->gaps)
         );
     }
 
@@ -103,11 +118,13 @@ class SackChunk extends Chunk
         $this->cumulativeTsn = $cumulativeTsn;
     }
 
+    /** @return array<array-key, array{0: int, 1: int}> */
     public function getGaps(): array
     {
         return $this->gaps;
     }
 
+    /** @param array<array-key, array{0: int, 1: int}> $gaps */
     public function setGaps(array $gaps): void
     {
         $this->gaps = $gaps;
@@ -123,11 +140,13 @@ class SackChunk extends Chunk
         $this->advertisedRwnd = $advertisedRwnd;
     }
 
+    /** @return array<int> */
     public function getDuplicates(): array
     {
         return $this->duplicates;
     }
 
+    /** @param array<int> $duplicates */
     public function setDuplicates(array $duplicates): void
     {
         $this->duplicates = $duplicates;

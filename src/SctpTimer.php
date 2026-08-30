@@ -30,7 +30,7 @@ use Revolt\EventLoop;
  * - Integrates with the Revolt event loop for timer management
  * - Provides logging capabilities for debugging timer operations
  */
-class SctpTimer
+final class SctpTimer
 {
     /** @var Chunk|null The chunk being tracked by this timer */
     private ?Chunk $chunk = null;
@@ -63,7 +63,7 @@ class SctpTimer
      */
     public function start(Chunk $chunk): void
     {
-        if ($this->task) {
+        if ($this->task !== null) {
             throw new RuntimeException('Task already started');
         }
         $this->chunk = $chunk;
@@ -78,7 +78,7 @@ class SctpTimer
      */
     public function cancel(): void
     {
-        if ($this->task) {
+        if ($this->task !== null && $this->chunk !== null) {
             $this->log("it canceled -> chunk: " . \get_class($this->chunk));
             EventLoop::cancel($this->task);
             $this->task = null;
@@ -96,11 +96,14 @@ class SctpTimer
     public function expired(): void
     {
         $this->task = null;
-        $this->log("it expired -> chunk: " . \get_class($this->chunk));
+        $this->log("it expired -> chunk: " . ($this->chunk !== null ? \get_class($this->chunk) : 'null'));
         if ($this->failures >= $this->maxTries) {
             $this->transport->setState(State::CLOSED);
         } else {
-            EventLoop::queue(fn () => $this->transport->sendChunk($this->chunk));
+            $chunk = $this->chunk;
+            if ($chunk !== null) {
+                EventLoop::queue(fn () => $this->transport->sendChunk($chunk));
+            }
             $this->task = EventLoop::delay($this->transport->getRto(), fn () => $this->expired());
         }
         $this->failures++;

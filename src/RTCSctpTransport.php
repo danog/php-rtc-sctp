@@ -13,12 +13,14 @@ namespace Webrtc\SCTP;
 
 use Closure;
 
+use Override;
 use Webrtc\DataChannel\Enum\State as DataChannelState;
 use Webrtc\DataChannel\RTCSctpTransportInterface;
 use Webrtc\Exception\InvalidArgumentException;
 use Webrtc\ICE\Enum\IceRole;
 use Webrtc\SCTP\Chunk\AbortChunk;
 use Webrtc\SCTP\Chunk\Chunk;
+use Webrtc\SCTP\Chunk\ChunkInterface;
 use Webrtc\SCTP\Chunk\CookieAckChunk;
 use Webrtc\SCTP\Chunk\CookieEchoChunk;
 use Webrtc\SCTP\Chunk\DataChunk;
@@ -41,13 +43,6 @@ use Webrtc\SCTP\Param\StreamResetOutgoingParam;
 use Webrtc\SCTP\Param\StreamResetResponseParam;
 use Webrtc\SCTP\Trait\DataChannel;
 use Webrtc\SDP\SctpParameter\RTCSctpCapabilities;
-use Webrtc\SSL\Exception\OpenSSLException;
-use Webrtc\SSL\Exception\SSLException;
-use Webrtc\SSL\Exception\SysCallException;
-use Webrtc\SSL\Exception\WantReadException;
-use Webrtc\SSL\Exception\WantWriteException;
-use Webrtc\SSL\Exception\WantX509LookupException;
-use Webrtc\SSL\Exception\ZeroReturnException;
 use Webrtc\Stats\enum\TLSState;
 use Evenement\EventEmitter;
 use Psr\Log\LoggerInterface;
@@ -66,10 +61,8 @@ use function Amp\async;
  * This implementation supports both client and server roles and is capable of managing stream reset, congestion control,
  * reconfiguration parameters, and forward TSNs. It interacts with the lower-level RTCDtlsTransport and provides a
  * high-level interface for data channels and SCTP signaling.
- *
- * @implements RTCSctpTransportInterface
  */
-class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
+final class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
 {
     use DataChannel;
 
@@ -112,9 +105,12 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
     private array $remoteExtensions = [];
     private bool $remotePartialReliability = false;
     private int $remoteVerificationTag = 0;
+    /** @var array<int, InboundStream> */
     private array $inboundStreams = [];
 
+    /** @var int[] */
     private array $sackDuplicates = [];
+    /** @var int[] */
     private array $sackMisordered = [];
     private int $cwnd = 3 * SctpConstant::USERDATA_MAX_LENGTH;
     private ?int $fastRecoveryExit = null;
@@ -127,6 +123,7 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
 
     /** @var SplQueue<DataChunk> */
     private SplQueue $outboundQueue;
+    /** @var array<int, int> */
     private array $outboundStreamSeq = [];
 
     private int $partialBytesAcked = 0;
@@ -148,7 +145,7 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
     private string $hmacKey;
     private bool $localPartialReliability = true;
 
-    /** @var int[]|string[] */
+    /** @var array<string, int> */
     private array $chunkTypes;
     private int $ssthresh;
 
@@ -175,9 +172,19 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
         $this->reconfigRequestSeq = $this->localTsn;
         $this->timer1 = new SctpTimer($this, SctpConstant::SCTP_MAX_INIT_RETRANS, $this->logger);
         $this->timer2 = new SctpTimer($this, SctpConstant::SCTP_MAX_ASSOCIATION_RETRANS, $this->logger);
-        $this->dataChannelQueue = new SplQueue();
-        $this->sentQueue = new SplQueue();
-        $this->outboundQueue = new SplQueue();
+        $this->ssthresh = 3 * SctpConstant::USERDATA_MAX_LENGTH;
+
+        $dataChannelQueue = new SplQueue();
+        /** @var SplQueue<array{0: \Webrtc\DataChannel\RTCDataChannel, 1: int, 2: string}> $dataChannelQueue */
+        $this->dataChannelQueue = $dataChannelQueue;
+
+        $sentQueue = new SplQueue();
+        /** @var SplQueue<DataChunk> $sentQueue */
+        $this->sentQueue = $sentQueue;
+
+        $outboundQueue = new SplQueue();
+        /** @var SplQueue<DataChunk> $outboundQueue */
+        $this->outboundQueue = $outboundQueue;
     }
 
     /**
@@ -288,13 +295,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
      * Start the SCTP association with the given remote port.
      *
      * @param int $remotePort Remote SCTP port to connect to.
-     * @throws OpenSSLException
-     * @throws SSLException
-     * @throws SysCallException
-     * @throws WantReadException
-     * @throws WantWriteException
-     * @throws WantX509LookupException
-     * @throws ZeroReturnException
      */
     public function start(int $remotePort): void
     {
@@ -315,13 +315,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
      * Stop the SCTP transport and terminate the association.
      *
      *
-     * @throws OpenSSLException
-     * @throws SSLException
-     * @throws SysCallException
-     * @throws WantReadException
-     * @throws WantWriteException
-     * @throws WantX509LookupException
-     * @throws ZeroReturnException
      */
     public function stop(): void
     {
@@ -337,14 +330,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
      * Internal method to initialize an SCTP association by sending an INIT chunk.
      *
      *
-     * @throws OpenSSLException
-     * @throws SSLException
-     * @throws SysCallException
-     * @throws TLSException
-     * @throws WantReadException
-     * @throws WantWriteException
-     * @throws WantX509LookupException
-     * @throws ZeroReturnException
      */
     private function init(): void
     {
@@ -367,7 +352,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
      * Send a chunk asynchronously over the DTLS transport.
      *
      * @param Chunk $chunk The SCTP chunk to send.
-     * @throws OpenSSLException|SSLException|SysCallException|WantReadException|WantWriteException|WantX509LookupException|ZeroReturnException
      */
     public function sendChunk(Chunk $chunk): void
     {
@@ -387,7 +371,7 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
      */
     private function encodeChunk(Chunk $chunk): string
     {
-        return SctpPacket::encode($this->localPort, $this->remotePort, $this->remoteVerificationTag, $chunk);
+        return SctpPacket::encode($this->localPort, $this->remotePort ?? 0, $this->remoteVerificationTag, $chunk);
     }
 
     /**
@@ -913,7 +897,7 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
     /**
      * Set what extensions are supported by the remote party.
      *
-     * @param array $params List of parameters (key-value pairs).
+     * @param array<array-key, array{0: int, 1: string}> $params List of parameters (key-value pairs).
      */
     private function setExtensions(array $params): void
     {
@@ -921,7 +905,11 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
             if ($k == SctpConstant::SCTP_PRSCTP_SUPPORTED) {
                 $this->remotePartialReliability = true;
             } elseif ($k == SctpConstant::SCTP_SUPPORTED_CHUNK_EXT) {
-                $this->remoteExtensions = array_values(unpack('C*', $v)); // Convert bytes to an array of integers
+                $unpackedExt = unpack('C*', $v); // Convert bytes to an array of integers
+                if ($unpackedExt === false) {
+                    continue;
+                }
+                $this->remoteExtensions = array_values($unpackedExt);
             }
         }
     }
@@ -929,6 +917,7 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
     /**
      * Get what extensions are supported by the local party.
      *
+     * @return array<array-key, array{0: int, 1: string}>
      */
     private function getExtensions(): array
     {
@@ -963,15 +952,8 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
      * Handle data received from the network.
      *
      * @param string $data The received data.
-     * @throws OpenSSLException
-     * @throws SSLException
-     * @throws SysCallException
-     * @throws TLSException
-     * @throws WantReadException
-     * @throws WantWriteException
-     * @throws WantX509LookupException
-     * @throws ZeroReturnException
      */
+    #[Override]
     public function onReceived(string $data): void
     {
         try {
@@ -1064,9 +1046,9 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
     /**
      * Handle an incoming chunk.
      *
-     * @param Chunk $chunk The incoming chunk.
+     * @param ChunkInterface $chunk The incoming chunk.
      */
-    public function receiveChunk(Chunk $chunk): void
+    public function receiveChunk(ChunkInterface $chunk): void
     {
         $this->log(sprintf(" Received chunk %s", $chunk));
         match ($chunk::class) {
@@ -1106,9 +1088,9 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
         // Defragment data
         $inboundStream->addChunk($chunk);
         $this->advertisedRwnd -= \strlen($chunk->getUserData());
-        foreach ($inboundStream->popMessages() as $message) {
-            $this->advertisedRwnd += \strlen($message[2]);
-            $this->receive(...$message);
+        foreach ($inboundStream->popMessages() as [$streamId, $ppId, $userData]) {
+            $this->advertisedRwnd += \strlen($userData);
+            $this->receive($streamId, $ppId, $userData);
         }
     }
 
@@ -1121,9 +1103,14 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
     public function markReceived(int $tsn): bool
     {
         // Mark incoming data TSN as received.
+        $lastReceived = $this->lastReceivedTsn;
+        if ($lastReceived === null) {
+            $lastReceived = SctpUtility::tsnMinusOne($tsn);
+            $this->lastReceivedTsn = $lastReceived;
+        }
 
         // It's a duplicate
-        if (SctpUtility::uint32Gte($this->lastReceivedTsn, $tsn) || \in_array($tsn, $this->sackMisordered, true)) {
+        if (SctpUtility::uint32Gte($lastReceived, $tsn) || \in_array($tsn, $this->sackMisordered, true)) {
             $this->sackDuplicates[] = $tsn;
             return true;
         }
@@ -1133,8 +1120,9 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
         sort($this->sackMisordered);
 
         foreach ($this->sackMisordered as $index => $misorderedTsn) {
-            if ($misorderedTsn === SctpUtility::tsnPlusOne($this->lastReceivedTsn)) {
+            if ($misorderedTsn === SctpUtility::tsnPlusOne($lastReceived)) {
                 $this->lastReceivedTsn = $misorderedTsn;
+                $lastReceived = $misorderedTsn;
                 unset($this->sackMisordered[$index]);
             } else {
                 break;
@@ -1142,8 +1130,8 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
         }
 
         // Filter out obsolete entries
-        $this->sackDuplicates = array_filter($this->sackDuplicates, fn ($x) => SctpUtility::uint32Gt($x, $this->lastReceivedTsn));
-        $this->sackMisordered = array_filter($this->sackMisordered, fn ($x) => SctpUtility::uint32Gt($x, $this->lastReceivedTsn));
+        $this->sackDuplicates = array_filter($this->sackDuplicates, fn (int $x) => SctpUtility::uint32Gt($x, $lastReceived));
+        $this->sackMisordered = array_filter($this->sackMisordered, fn (int $x) => SctpUtility::uint32Gt($x, $lastReceived));
 
         return false;
     }
@@ -1173,22 +1161,32 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
     {
         $this->sackNeeded = true;
 
+        $lastReceived = $this->lastReceivedTsn;
+        if ($lastReceived === null) {
+            $lastReceived = SctpUtility::tsnMinusOne($chunk->getCumulativeTsn());
+            $this->lastReceivedTsn = $lastReceived;
+        }
+
         // Ignore duplicate TSNs
-        if (SctpUtility::uint32Gte($this->lastReceivedTsn, $chunk->getCumulativeTsn())) {
+        if (SctpUtility::uint32Gte($lastReceived, $chunk->getCumulativeTsn())) {
             return;
         }
 
-        $isObsolete = fn ($tsn) => SctpUtility::uint32Gt($tsn, $this->lastReceivedTsn);
+        $isObsolete = static function (int $tsn) use (&$lastReceived): bool {
+            return SctpUtility::uint32Gt($tsn, $lastReceived);
+        };
 
         // Advance cumulative TSN
         $this->lastReceivedTsn = $chunk->getCumulativeTsn();
+        $lastReceived = $chunk->getCumulativeTsn();
         $this->sackMisordered = array_filter($this->sackMisordered, $isObsolete);
 
         // Sort and update misordered TSNs
         sort($this->sackMisordered);
         foreach ($this->sackMisordered as $tsn) {
-            if ($tsn === SctpUtility::tsnPlusOne($this->lastReceivedTsn)) {
+            if ($tsn === SctpUtility::tsnPlusOne($lastReceived)) {
                 $this->lastReceivedTsn = $tsn;
+                $lastReceived = $tsn;
             } else {
                 break;
             }
@@ -1204,15 +1202,15 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
 
             // Update sequence number and process messages
             $inboundStream->setSequenceNumber(SctpUtility::uint16Add($streamSeq, 1));
-            foreach ($inboundStream->popMessages() as $message) {
-                $this->advertisedRwnd += \strlen($message[2]);
-                $this->receive(...$message);
+            foreach ($inboundStream->popMessages() as [$streamId, $ppId, $userData]) {
+                $this->advertisedRwnd += \strlen($userData);
+                $this->receive($streamId, $ppId, $userData);
             }
         }
 
         // Prune obsolete chunks
         foreach ($this->inboundStreams as $inboundStream) {
-            $this->advertisedRwnd += $inboundStream->pruneChunks($this->lastReceivedTsn);
+            $this->advertisedRwnd += $inboundStream->pruneChunks($lastReceived);
         }
     }
 
@@ -1220,14 +1218,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
      * Handle a SACK chunk.
      *
      * @param SackChunk $chunk The SACK chunk.
-     * @throws OpenSSLException
-     * @throws SSLException
-     * @throws SysCallException
-     * @throws TLSException
-     * @throws WantReadException
-     * @throws WantWriteException
-     * @throws WantX509LookupException
-     * @throws ZeroReturnException
      */
     public function receiveSackChunk(SackChunk $chunk): void
     {
@@ -1272,7 +1262,10 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
 
             // Update RTO estimate
             if ($done === 1 && $schunk->getAttributes()->sentCount === 1) {
-                $this->updateRto(time() - $schunk->getAttributes()->sentTime);
+                $sentTime = $schunk->getAttributes()->sentTime;
+                if ($sentTime !== null) {
+                    $this->updateRto(((float) time()) - $sentTime);
+                }
             }
         }
 
@@ -1366,7 +1359,7 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
                 $this->ssthresh = max((int) ($this->cwnd / 2), 4 * SctpConstant::USERDATA_MAX_LENGTH);
                 $this->cwnd = $this->ssthresh;
                 $this->partialBytesAcked = 0;
-                $this->fastRecoveryExit = $this->sentQueue->top()->getTsn() ?? null;
+                $this->fastRecoveryExit = $this->sentQueue->top()->getTsn();
                 $this->fastRecoveryTransmit = true;
             }
         } elseif (SctpUtility::uint32Gte($chunk->getCumulativeTsn(), $this->fastRecoveryExit)) {
@@ -1396,14 +1389,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
      * Responds to a HEARTBEAT chunk by sending a HEARTBEAT_ACK.
      *
      * @param HeartbeatChunk $chunk The received HEARTBEAT chunk.
-     * @throws OpenSSLException
-     * @throws SSLException
-     * @throws SysCallException
-     * @throws TLSException
-     * @throws WantReadException
-     * @throws WantWriteException
-     * @throws WantX509LookupException
-     * @throws ZeroReturnException
      */
     public function receiveHeartbeatChunk(HeartbeatChunk $chunk): void
     {
@@ -1416,14 +1401,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
      * Handles an ABORT chunk and transitions the connection to CLOSED state.
      *
      * @param AbortChunk $chunk The received ABORT chunk.
-     * @throws OpenSSLException
-     * @throws SSLException
-     * @throws SysCallException
-     * @throws TLSException
-     * @throws WantReadException
-     * @throws WantWriteException
-     * @throws WantX509LookupException
-     * @throws ZeroReturnException
      */
     public function receiveAbortChunk(AbortChunk $chunk): void
     {
@@ -1437,14 +1414,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
      * Also cancels the shutdown timer and sets the appropriate connection state.
      *
      * @param ShutdownChunk $chunk The received SHUTDOWN chunk.
-     * @throws OpenSSLException
-     * @throws SSLException
-     * @throws SysCallException
-     * @throws TLSException
-     * @throws WantReadException
-     * @throws WantWriteException
-     * @throws WantX509LookupException
-     * @throws ZeroReturnException
      */
     public function receiveShutdownChunk(ShutdownChunk $chunk): void
     {
@@ -1462,14 +1431,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
      * Transitions to CLOSED state if in SHUTDOWN_ACK_SENT state.
      *
      * @param ShutdownCompleteChunk $chunk The received SHUTDOWN_COMPLETE chunk.
-     * @throws OpenSSLException
-     * @throws SSLException
-     * @throws SysCallException
-     * @throws TLSException
-     * @throws WantReadException
-     * @throws WantWriteException
-     * @throws WantX509LookupException
-     * @throws ZeroReturnException
      */
     public function receiveShutdownCompleteChunk(ShutdownCompleteChunk $chunk): void
     {
@@ -1486,14 +1447,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
      * Only processes the chunk if in ESTABLISHED state.
      *
      * @param ReconfigChunk $chunk The received RECONFIG chunk.
-     * @throws OpenSSLException
-     * @throws SSLException
-     * @throws SysCallException
-     * @throws TLSException
-     * @throws WantReadException
-     * @throws WantWriteException
-     * @throws WantX509LookupException
-     * @throws ZeroReturnException
      */
     public function receiveReconfigChunk(ReconfigChunk $chunk): void
     {
@@ -1501,8 +1454,13 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
             return;
         }
         foreach ($chunk->getParams() as $param) {
-            $cls = "Webrtc\SCTP\Param\\" . self::RECONFIG_PARAM_TYPES[$param[0]] ?? null;
+            $paramType = self::RECONFIG_PARAM_TYPES[$param[0]] ?? null;
+            if ($paramType === null) {
+                continue;
+            }
+            $cls = "Webrtc\SCTP\Param\\" . $paramType;
             if (class_exists($cls)) {
+                /** @var class-string<StreamParamInterface> $cls */
                 $this->receiveReconfigParam($cls::decode($param[1]));
             }
         }
@@ -1515,14 +1473,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
      * Only valid if the local endpoint is acting as server.
      *
      * @param InitChunk $chunk The received INIT chunk.
-     * @throws OpenSSLException
-     * @throws SSLException
-     * @throws SysCallException
-     * @throws TLSException
-     * @throws WantReadException
-     * @throws WantWriteException
-     * @throws WantX509LookupException
-     * @throws ZeroReturnException
      */
     public function receiveInitChunk(InitChunk $chunk): void
     {
@@ -1572,14 +1522,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
      * Only valid if the local endpoint is acting as server.
      *
      * @param CookieEchoChunk $chunk The received COOKIE_ECHO chunk.
-     * @throws OpenSSLException
-     * @throws SSLException
-     * @throws SysCallException
-     * @throws TLSException
-     * @throws WantReadException
-     * @throws WantWriteException
-     * @throws WantX509LookupException
-     * @throws ZeroReturnException
      */
     public function receiveCookieEchoChunk(CookieEchoChunk $chunk): void
     {
@@ -1598,7 +1540,12 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
         }
 
         // Check state cookie lifetime
-        $stamp = unpack("N", substr($cookie, 0, 4))[1];
+        $stampData = unpack("N", substr($cookie, 0, 4));
+        if ($stampData === false) {
+            $this->log("x State cookie is invalid");
+            return;
+        }
+        $stamp = (int) $stampData[1];
         $now = $this->getTime();
         if ($stamp < $now - SctpConstant::COOKIE_LIFETIME || $stamp > $now) {
             $this->log("Cookie has expired");
@@ -1619,14 +1566,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
      * Only processed if currently in COOKIE_WAIT state.
      *
      * @param InitAckChunk $chunk The received INIT_ACK chunk.
-     * @throws OpenSSLException
-     * @throws SSLException
-     * @throws SysCallException
-     * @throws TLSException
-     * @throws WantReadException
-     * @throws WantWriteException
-     * @throws WantX509LookupException
-     * @throws ZeroReturnException
      */
     public function receiveInitAckChunk(InitAckChunk $chunk): void
     {
@@ -1676,14 +1615,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
      * Only processed if currently in COOKIE_ECHOED state.
      *
      * @param CookieAckChunk $chunk The received COOKIE_ACK chunk.
-     * @throws OpenSSLException
-     * @throws SSLException
-     * @throws SysCallException
-     * @throws TLSException
-     * @throws WantReadException
-     * @throws WantWriteException
-     * @throws WantX509LookupException
-     * @throws ZeroReturnException
      */
     public function receiveCookieAckChunk(CookieAckChunk $chunk): void
     {
@@ -1700,14 +1631,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
      * Closes the connection if in COOKIE_WAIT or COOKIE_ECHOED state.
      *
      * @param ErrorChunk $chunk The received ERROR chunk.
-     * @throws OpenSSLException
-     * @throws SSLException
-     * @throws SysCallException
-     * @throws TLSException
-     * @throws WantReadException
-     * @throws WantWriteException
-     * @throws WantX509LookupException
-     * @throws ZeroReturnException
      */
     public function receiveErrorChunk(ErrorChunk $chunk): void
     {
@@ -1724,14 +1647,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
      * Handle a RE-CONFIG parameter.
      *
      * @param StreamParamInterface $param The RE-CONFIG parameter.
-     * @throws OpenSSLException
-     * @throws SSLException
-     * @throws SysCallException
-     * @throws TLSException
-     * @throws WantReadException
-     * @throws WantWriteException
-     * @throws WantX509LookupException
-     * @throws ZeroReturnException
      */
     public function receiveReconfigParam(StreamParamInterface $param): void
     {
@@ -1771,7 +1686,7 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
             $this->sendReconfigParam($responseParam);
         } elseif ($param instanceof StreamResetResponseParam) {
             if (
-                $this->reconfigRequest !== null &&
+                $this->reconfigRequest instanceof StreamResetOutgoingParam &&
                 $param->getResponseSequence() == $this->reconfigRequest->getRequestSequence()
             ) {
                 // Mark closed streams
@@ -1791,14 +1706,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
      * Send a RE-CONFIG parameter.
      *
      * @param StreamParamInterface $param The RE-CONFIG parameter.
-     * @throws OpenSSLException
-     * @throws SSLException
-     * @throws SysCallException
-     * @throws TLSException
-     * @throws WantReadException
-     * @throws WantWriteException
-     * @throws WantX509LookupException
-     * @throws ZeroReturnException
      */
     public function sendReconfigParam(StreamParamInterface $param): void
     {
@@ -1820,23 +1727,20 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
     /**
      * Build and send a selective acknowledgement (SACK) chunk.
      *
-     * @throws OpenSSLException
-     * @throws SSLException
-     * @throws SysCallException
-     * @throws TLSException
-     * @throws WantReadException
-     * @throws WantWriteException
-     * @throws WantX509LookupException
-     * @throws ZeroReturnException
      */
     public function sendSack(): void
     {
+        $lastReceived = $this->lastReceivedTsn;
+        if ($lastReceived === null) {
+            return;
+        }
+
         $gaps = [];
         $gapNext = null;
         foreach ($this->sackMisordered as $tsn) {
-            $pos = ($tsn - $this->lastReceivedTsn) % SctpConstant::SCTP_TSN_MODULO;
+            $pos = ($tsn - $lastReceived) % SctpConstant::SCTP_TSN_MODULO;
             if ($tsn == $gapNext) {
-                $gaps[\count($gaps) - 1][1] = $pos;
+                $gaps[\count($gaps) - 1] = [$gaps[\count($gaps) - 1][0], $pos];
             } else {
                 $gaps[] = [$pos, $pos];
             }
@@ -1844,7 +1748,7 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
         }
 
         $sack = new SackChunk();
-        $sack->setCumulativeTsn($this->lastReceivedTsn);
+        $sack->setCumulativeTsn($lastReceived);
         $sack->setAdvertisedRwnd(max(0, $this->advertisedRwnd));
         $sack->setDuplicates($this->sackDuplicates);
         $sack->setGaps($gaps);
@@ -1859,14 +1763,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
      * Transition the SCTP association to a new state.
      *
      * @param State $state The new state.
-     * @throws OpenSSLException
-     * @throws SSLException
-     * @throws SysCallException
-     * @throws TLSException
-     * @throws WantReadException
-     * @throws WantWriteException
-     * @throws WantX509LookupException
-     * @throws ZeroReturnException
      */
     public function setState(State $state): void
     {
@@ -1899,15 +1795,8 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
     }
 
     /**
-     * @throws OpenSSLException
-     * @throws SSLException
-     * @throws SysCallException
-     * @throws TLSException
-     * @throws WantReadException
-     * @throws WantWriteException
-     * @throws WantX509LookupException
-     * @throws ZeroReturnException
      */
+    #[Override]
     public function onErrorOrClosed(): void
     {
         $this->stop();

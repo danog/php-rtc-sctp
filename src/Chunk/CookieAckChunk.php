@@ -14,7 +14,7 @@ namespace Webrtc\SCTP\Chunk;
 /**
  * Cookie Acknowledgment chunk.
  */
-class CookieAckChunk extends Chunk
+final class CookieAckChunk extends Chunk
 {
     /** @var int Chunk type identifier. */
     protected int $type = 11;

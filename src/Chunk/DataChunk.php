@@ -11,12 +11,14 @@
 
 namespace Webrtc\SCTP\Chunk;
 
+use Override;
+use Webrtc\Exception\InvalidArgumentException;
 use Webrtc\SCTP\SctpUtility;
 
 /**
  * Data chunk.
  */
-class DataChunk extends Chunk
+final class DataChunk extends Chunk
 {
     /** @var int Chunk type identifier. */
     protected int $type = 0;
@@ -45,12 +47,15 @@ class DataChunk extends Chunk
     public function __construct(int $flags = 0, ?string $body = null)
     {
         parent::__construct($flags);
-        if ($body) {
+        if ($body !== null && $body !== "") {
             $unpacked = unpack("Ntsn/nstreamId/nstreamSeq/Nprotocol", $body);
-            $this->tsn = $unpacked["tsn"];
-            $this->streamId = $unpacked["streamId"];
-            $this->streamSeq = $unpacked["streamSeq"];
-            $this->protocol = $unpacked["protocol"];
+            if ($unpacked === false) {
+                throw new InvalidArgumentException("Failed to unpack DATA chunk body");
+            }
+            $this->tsn = (int) $unpacked["tsn"];
+            $this->streamId = (int) $unpacked["streamId"];
+            $this->streamSeq = (int) $unpacked["streamSeq"];
+            $this->protocol = (int) $unpacked["protocol"];
             $this->userData = substr($body, 12);
         } else {
             $this->tsn = 0;
@@ -66,6 +71,7 @@ class DataChunk extends Chunk
      *
      * @return string Binary representation of the chunk.
      */
+    #[Override]
     public function encode(): string
     {
         $length = 16 + \strlen($this->userData);

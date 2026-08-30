@@ -14,7 +14,7 @@ namespace Webrtc\SCTP\Chunk;
 use Webrtc\Mixin\DataClass;
 
 #[DataClass]
-class AttributeChunk
+final class AttributeChunk
 {
     /**
      * Attrs of chunk.

@@ -12,7 +12,23 @@
 namespace Webrtc\SCTP;
 
 use Webrtc\Exception\InvalidArgumentException;
+use Webrtc\SCTP\Chunk\AbortChunk;
 use Webrtc\SCTP\Chunk\Chunk;
+use Webrtc\SCTP\Chunk\ChunkInterface;
+use Webrtc\SCTP\Chunk\CookieAckChunk;
+use Webrtc\SCTP\Chunk\CookieEchoChunk;
+use Webrtc\SCTP\Chunk\DataChunk;
+use Webrtc\SCTP\Chunk\ErrorChunk;
+use Webrtc\SCTP\Chunk\ForwardTsnChunk;
+use Webrtc\SCTP\Chunk\HeartbeatAckChunk;
+use Webrtc\SCTP\Chunk\HeartbeatChunk;
+use Webrtc\SCTP\Chunk\InitAckChunk;
+use Webrtc\SCTP\Chunk\InitChunk;
+use Webrtc\SCTP\Chunk\ReconfigChunk;
+use Webrtc\SCTP\Chunk\SackChunk;
+use Webrtc\SCTP\Chunk\ShutdownAckChunk;
+use Webrtc\SCTP\Chunk\ShutdownChunk;
+use Webrtc\SCTP\Chunk\ShutdownCompleteChunk;
 
 /**
  * SCTP Packet handling class.
@@ -26,7 +42,7 @@ use Webrtc\SCTP\Chunk\Chunk;
  * - Validating packet integrity through checksum verification
  * - Supporting all standard SCTP chunk types as defined in RFC 4960
  */
-class SctpPacket
+final class SctpPacket
 {
     /**
      * Mapping of SCTP chunk type codes to their corresponding class names.
@@ -77,12 +93,19 @@ class SctpPacket
         }
 
         $unpacked = unpack("nsourcePort/ndestinationPort/NverificationTag", $data);
-        $sourcePort = $unpacked['sourcePort'];
-        $destinationPort = $unpacked['destinationPort'];
-        $verificationTag = $unpacked['verificationTag'];
+        if ($unpacked === false) {
+            throw new InvalidArgumentException("SCTP packet header could not be unpacked");
+        }
+        $sourcePort = (int) $unpacked['sourcePort'];
+        $destinationPort = (int) $unpacked['destinationPort'];
+        $verificationTag = (int) $unpacked['verificationTag'];
 
         // Verify checksum
-        $checksum = unpack("V", substr($data, 8, 4))[1];
+        $checksumData = unpack("V", substr($data, 8, 4));
+        if ($checksumData === false) {
+            throw new InvalidArgumentException("SCTP checksum could not be unpacked");
+        }
+        $checksum = (int) $checksumData[1];
         if ($checksum !== SctpUtility::crc32c(substr($data, 0, 8) . "\x00\x00\x00\x00" . substr($data, 12))) {
             throw new InvalidArgumentException("SCTP packet has invalid checksum");
         }
@@ -91,20 +114,55 @@ class SctpPacket
         $pos = 12;
         while ($pos <= $length - 4) {
             $chunkHeader = unpack("Ctype/Cflags/nlength", substr($data, $pos, 4));
-            $chunkType = $chunkHeader['type'];
-            $chunkFlags = $chunkHeader['flags'];
-            $chunkLength = $chunkHeader['length'];
+            if ($chunkHeader === false) {
+                throw new InvalidArgumentException("SCTP chunk header could not be unpacked");
+            }
+            $chunkType = (int) $chunkHeader['type'];
+            $chunkFlags = (int) $chunkHeader['flags'];
+            $chunkLength = (int) $chunkHeader['length'];
 
             $chunkBody = substr($data, $pos + 4, $chunkLength - 4);
             if (isset(self::CHUNK_TYPES[$chunkType])) {
-                $chunkCls = "\\Webrtc\\SCTP\\Chunk\\" . self::CHUNK_TYPES[$chunkType];
-                $chunks[] = new $chunkCls($chunkFlags, $chunkBody);
+                $chunk = self::chunkFromType($chunkType, $chunkFlags, $chunkBody);
+                if ($chunk !== null) {
+                    $chunks[] = $chunk;
+                }
             }
 
             $pos += $chunkLength + SctpUtility::padl($chunkLength);
         }
 
         return [$sourcePort, $destinationPort, $verificationTag, $chunks];
+    }
+
+    /**
+     * Instantiates an SCTP chunk object for the given chunk type.
+     *
+     * @param int $type The SCTP chunk type code.
+     * @param int $flags The chunk flags.
+     * @param string $body The chunk body.
+     * @return ChunkInterface|null The chunk object, or null if the type is not supported.
+     */
+    private static function chunkFromType(int $type, int $flags, string $body): ?ChunkInterface
+    {
+        return match ($type) {
+            0 => new DataChunk($flags, $body),
+            1 => new InitChunk($flags, $body),
+            2 => new InitAckChunk($flags, $body),
+            3 => new SackChunk($flags, $body),
+            4 => new HeartbeatChunk($flags, $body),
+            5 => new HeartbeatAckChunk($flags, $body),
+            6 => new AbortChunk($flags, $body),
+            7 => new ShutdownChunk($flags, $body),
+            8 => new ShutdownAckChunk($flags, $body),
+            9 => new ErrorChunk($flags, $body),
+            10 => new CookieEchoChunk($flags, $body),
+            11 => new CookieAckChunk($flags, $body),
+            14 => new ShutdownCompleteChunk($flags, $body),
+            130 => new ReconfigChunk($flags, $body),
+            192 => new ForwardTsnChunk($flags, $body),
+            default => null,
+        };
     }
 
     /**

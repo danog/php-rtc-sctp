@@ -11,6 +11,8 @@
 
 namespace Webrtc\SCTP\Chunk;
 
+use Override;
+use Webrtc\Exception\InvalidArgumentException;
 use Webrtc\SCTP\SctpUtility;
 
 /**
@@ -37,7 +39,7 @@ class BaseInitChunk extends Chunk
     /** @var int Initial Transmission Sequence Number. */
     protected int $initialTsn;
 
-    /** @var array List of encoded optional parameters. */
+    /** @var array<array-key, array{0: int, 1: string}> List of encoded optional parameters. */
     protected array $params = [];
 
     /**
@@ -51,13 +53,16 @@ class BaseInitChunk extends Chunk
     public function __construct(int $flags = 0, ?string $body = null)
     {
         parent::__construct($flags);
-        if ($body) {
+        if ($body !== null && $body !== "") {
             $unpacked = unpack("NinitiateTag/NadvertisedRwnd/noutboundStreams/ninboundStreams/NinitialTsn", substr($body, 0, 16));
-            $this->initiateTag = $unpacked["initiateTag"];
-            $this->advertisedRwnd = $unpacked["advertisedRwnd"];
-            $this->outboundStreams = $unpacked["outboundStreams"];
-            $this->inboundStreams = $unpacked["inboundStreams"];
-            $this->initialTsn = $unpacked["initialTsn"];
+            if ($unpacked === false) {
+                throw new InvalidArgumentException("Failed to unpack INIT chunk body");
+            }
+            $this->initiateTag = (int) $unpacked["initiateTag"];
+            $this->advertisedRwnd = (int) $unpacked["advertisedRwnd"];
+            $this->outboundStreams = (int) $unpacked["outboundStreams"];
+            $this->inboundStreams = (int) $unpacked["inboundStreams"];
+            $this->initialTsn = (int) $unpacked["initialTsn"];
             $this->params = SctpUtility::decodeParams(substr($body, 16));
         } else {
             $this->initiateTag = 0;
@@ -172,7 +177,7 @@ class BaseInitChunk extends Chunk
     /**
      * Gets the list of optional parameters.
      *
-     * @return array Parameters array.
+     * @return array<array-key, array{0: int, 1: string}> Parameters array.
      */
     public function getParams(): array
     {
@@ -182,7 +187,7 @@ class BaseInitChunk extends Chunk
     /**
      * Sets the list of optional parameters.
      *
-     * @param array $params Parameters to set.
+     * @param array<array-key, array{0: int, 1: string}> $params Parameters to set.
      */
     public function setParams(array $params): void
     {
@@ -192,9 +197,9 @@ class BaseInitChunk extends Chunk
     /**
      * Adds one or more parameters to the existing parameter list.
      *
-     * @param mixed $param A parameter or array of parameters to add.
+     * @param array<array-key, array{0: int, 1: string}> $param A parameter or array of parameters to add.
      */
-    public function addParams(mixed $param): void
+    public function addParams(array $param): void
     {
         $this->params = array_merge($this->params, $param);
     }
@@ -204,6 +209,7 @@ class BaseInitChunk extends Chunk
      *
      * @return string Encoded chunk body.
      */
+    #[Override]
     public function getBody(): string
     {
         $body = pack("NNnnN", $this->initiateTag, $this->advertisedRwnd, $this->outboundStreams, $this->inboundStreams, $this->initialTsn);

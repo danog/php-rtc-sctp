@@ -14,7 +14,7 @@ namespace Webrtc\SCTP\Chunk;
 /**
  * Abort chunk.
  */
-class AbortChunk extends BaseParamsChunk
+final class AbortChunk extends BaseParamsChunk
 {
     /** @var int Chunk type identifier. */
     protected int $type = 6;

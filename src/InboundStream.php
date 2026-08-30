@@ -33,7 +33,7 @@ use Generator;
  * Used in the context of SCTP-based WebRTC data channels to correctly parse and deliver
  * incoming fragmented messages on each stream.
  */
-class InboundStream
+final class InboundStream
 {
     /** @var DataChunk[] List of DataChunk objects for reassembly. */
     private array $reassembly = [];
@@ -60,7 +60,7 @@ class InboundStream
             }
 
             if (SctpUtility::uint32Gt($rchunk->getTsn(), $chunk->getTsn())) {
-                array_splice($this->reassembly, $i, 0, [$chunk]);
+                array_splice($this->reassembly, (int) $i, 0, [$chunk]);
                 return;
             }
         }
@@ -78,7 +78,7 @@ class InboundStream
     /**
      * Pops complete messages from the reassembly list.
      *
-     * @return Generator Yields tuples of (streamId, protocol, userData).
+     * @return Generator<array{0: int, 1: int, 2: string}> Yields tuples of (streamId, protocol, userData).
      */
     public function popMessages(): Generator
     {
@@ -98,7 +98,7 @@ class InboundStream
      * Handles message extraction and validation.
      *
      * @param int &$pos Current position in reassembly an array.
-     * @return array|null Returns a complete message tuple or null if incomplete.
+     * @return array{0: int, 1: int, 2: string}|null Returns a complete message tuple or null if incomplete.
      */
     private function processMessageExtraction(int &$pos): ?array
     {
@@ -114,10 +114,11 @@ class InboundStream
                     continue;
                 }
 
-                [$startPos, , $expectedTsn] = $this->initializeMessageExtraction($pos, $chunk);
-                if ($startPos === null) {
+                $extraction = $this->initializeMessageExtraction($pos, $chunk);
+                if ($extraction === null) {
                     return null;
                 }
+                [$startPos, , $expectedTsn] = $extraction;
             } elseif ($chunk->getTsn() !== $expectedTsn) {
                 return null;
             }
@@ -138,7 +139,7 @@ class InboundStream
      *
      * @param int $pos Current position in reassembly an array.
      * @param DataChunk $chunk First chunk of the message.
-     * @return array|null Returns an array with start position, ordered flag, and expected TSN or null if invalid.
+     * @return array{0: int, 1: bool, 2: int}|null Returns an array with start position, ordered flag, and expected TSN or null if invalid.
      */
     private function initializeMessageExtraction(int $pos, DataChunk $chunk): ?array
     {
@@ -165,7 +166,7 @@ class InboundStream
      * @param int $startPos Start position in reassembly an array.
      * @param int &$pos Current position in reassembly an array.
      * @param DataChunk $chunk The last fragment chunk.
-     * @return array The assembled message tuple.
+     * @return array{0: int, 1: int, 2: string} The assembled message tuple.
      */
     private function assembleMessage(int $startPos, int &$pos, DataChunk $chunk): array
     {
@@ -204,7 +205,7 @@ class InboundStream
             }
         }
 
-        $this->reassembly = \array_slice($this->reassembly, $pos + 1);
+        $this->reassembly = \array_slice($this->reassembly, (int) $pos + 1);
         return $size;
     }
 
