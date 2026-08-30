@@ -159,8 +159,11 @@ class RTCSctpTransportTest extends TestCase
         $server->start($client->getPort());
         $client->start($server->getPort());
 
-        // Wait async until to connect or fail
-        $this->asyncSleep(.05);
+        // Wait for both sides to reach ESTABLISHED instead of guessing how long the
+        // lossy handshake takes: 30% loss with a 10ms RTO can exceed a fixed sleep on
+        // coarse-timer platforms.
+        $this->waitForState($client, State::ESTABLISHED);
+        $this->waitForState($server, State::ESTABLISHED);
 
         $this->assertEquals(State::ESTABLISHED, $client->getState());
         $this->assertEquals(State::ESTABLISHED, $server->getState());
