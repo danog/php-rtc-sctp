@@ -44,6 +44,7 @@ use Webrtc\SCTP\Param\StreamResetResponseParam;
 use Webrtc\SCTP\Trait\DataChannel;
 use Webrtc\SDP\SctpParameter\RTCSctpCapabilities;
 use Webrtc\Stats\enum\TLSState;
+use Webrtc\Mixin\SerializableState;
 use Evenement\EventEmitter;
 use Psr\Log\LoggerInterface;
 use Random\RandomException;
@@ -1817,5 +1818,34 @@ final class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInt
     public function getTime(): int
     {
         return time();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function __serialize(): array
+    {
+        return SerializableState::export($this, [
+            'dataChannelTask' => $this->dataChannelTask !== null,
+        ]);
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    public function __unserialize(array $data): void
+    {
+        $restart = false;
+        foreach ($data as $key => $value) {
+            if (is_string($key) && str_ends_with($key, "\0dataChannelTask")) {
+                $restart = $value === true;
+                $data[$key] = null;
+            }
+        }
+        SerializableState::import($this, $data);
+        $this->dataChannelTask = null;
+        if ($restart) {
+            $this->dataChannelTaskStart();
+        }
     }
 }
