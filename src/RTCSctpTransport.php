@@ -1836,8 +1836,11 @@ final class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInt
     public function __unserialize(array $data): void
     {
         $restart = false;
+        /**
+         * @var mixed $value
+         */
         foreach ($data as $key => $value) {
-            if (is_string($key) && str_ends_with($key, "\0dataChannelTask")) {
+            if (str_ends_with($key, "\0dataChannelTask")) {
                 $restart = $value === true;
                 $data[$key] = null;
             }

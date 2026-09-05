@@ -181,8 +181,11 @@ final class SctpTimer
     public function __unserialize(array $data): void
     {
         $restart = false;
+        /**
+         * @var mixed $value
+         */
         foreach ($data as $key => $value) {
-            if (is_string($key) && str_ends_with($key, "\0task")) {
+            if (str_ends_with($key, "\0task")) {
                 $restart = $value === true;
                 $data[$key] = null;
             }
