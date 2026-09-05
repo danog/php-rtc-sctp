@@ -12,6 +12,7 @@
 namespace Webrtc\SCTP;
 
 use Webrtc\Exception\RuntimeException;
+use Webrtc\Mixin\SerializableState;
 use Webrtc\SCTP\Chunk\Chunk;
 use Webrtc\SCTP\Enum\State;
 use Psr\Log\LoggerInterface;
@@ -68,7 +69,7 @@ final class SctpTimer
         }
         $this->chunk = $chunk;
         $this->log("it started -> chunk: " . \get_class($this->chunk));
-        $this->task = EventLoop::delay($this->transport->getRto(), fn () => $this->expired());
+        $this->task = EventLoop::delay($this->transport->getRto(), $this->expired(...));
     }
 
     /**
@@ -102,9 +103,11 @@ final class SctpTimer
         } else {
             $chunk = $this->chunk;
             if ($chunk !== null) {
-                EventLoop::queue(fn () => $this->transport->sendChunk($chunk));
+                EventLoop::queue(function () use ($chunk): void {
+                    $this->transport->sendChunk($chunk);
+                });
             }
-            $this->task = EventLoop::delay($this->transport->getRto(), fn () => $this->expired());
+            $this->task = EventLoop::delay($this->transport->getRto(), $this->expired(...));
         }
         $this->failures++;
     }
@@ -160,5 +163,34 @@ final class SctpTimer
     public function setTask(?string $task): void
     {
         $this->task = $task;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function __serialize(): array
+    {
+        return SerializableState::export($this, [
+            'task' => $this->task !== null,
+        ]);
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    public function __unserialize(array $data): void
+    {
+        $restart = false;
+        foreach ($data as $key => $value) {
+            if (is_string($key) && str_ends_with($key, "\0task")) {
+                $restart = $value === true;
+                $data[$key] = null;
+            }
+        }
+        SerializableState::import($this, $data);
+        $this->task = null;
+        if ($restart && $this->chunk !== null) {
+            $this->task = EventLoop::delay($this->transport->getRto(), $this->expired(...));
+        }
     }
 }

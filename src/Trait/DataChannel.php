@@ -91,7 +91,7 @@ trait DataChannel
             EventLoop::cancel($this->dataChannelTask);
             $this->dataChannelTask = null;
         }
-        $this->dataChannelTask = EventLoop::delay($this->rto, fn () => $this->dataChannelTaskExpired());
+        $this->dataChannelTask = EventLoop::delay($this->rto, $this->dataChannelTaskExpired(...));
     }
 
     /**
@@ -105,7 +105,7 @@ trait DataChannel
             throw new RuntimeException("Datachannel timer already started");
         }
         $this->log(" Datachannel timer started");
-        $this->dataChannelTask = EventLoop::delay($this->rto, fn () => $this->dataChannelTaskExpired());
+        $this->dataChannelTask = EventLoop::delay($this->rto, $this->dataChannelTaskExpired(...));
     }
 
     /**

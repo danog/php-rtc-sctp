@@ -11,7 +11,7 @@
 
 namespace Webrtc\SCTP;
 
-use Closure;
+
 
 use Override;
 use Webrtc\DataChannel\Enum\State as DataChannelState;
@@ -76,7 +76,8 @@ final class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInt
     private State $state = State::CLOSED;
 
     /** When set, incoming user data goes here instead of to the data channel layer. */
-    private ?Closure $signalingSink = null;
+    /** @var object{__invoke(string): void}|null */
+    private ?object $signalingSink = null;
     private bool $started = false;
 
     // Local variables
@@ -207,8 +208,14 @@ final class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInt
      * data channel: it just opens stream 0 and sends user data on it. When a sink is installed,
      * incoming user data bypasses the data channel layer entirely.
      */
-    public function setSignalingSink(?Closure $sink): void
+    /**
+     * @param object{__invoke(string): void}|null $sink A serializable invokable, not a Closure.
+     */
+    public function setSignalingSink(?object $sink): void
     {
+        if ($sink instanceof \Closure) {
+            throw new InvalidArgumentException('Signaling sink must be a serializable invokable object, not a Closure.');
+        }
         $this->signalingSink = $sink;
     }
 
