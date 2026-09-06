@@ -15,9 +15,11 @@ namespace Webrtc\SCTP;
 
 use Override;
 use Webrtc\DataChannel\Enum\State as DataChannelState;
+use Webrtc\DataChannel\RTCDataChannel;
 use Webrtc\DataChannel\RTCSctpTransportInterface;
 use Webrtc\Exception\InvalidArgumentException;
 use Webrtc\ICE\Enum\IceRole;
+use Webrtc\SCTP\Listener\DataChannelListener;
 use Webrtc\SCTP\Chunk\AbortChunk;
 use Webrtc\SCTP\Chunk\Chunk;
 use Webrtc\SCTP\Chunk\ChunkInterface;
@@ -79,6 +81,9 @@ final class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInt
     /** When set, incoming user data goes here instead of to the data channel layer. */
     private ?SignalingSinkInterface $signalingSink = null;
     private bool $started = false;
+
+    /** @var \WeakMap<DataChannelListener, null> Listeners for remotely-opened data channels. */
+    private \WeakMap $dataChannelListeners;
 
     // Local variables
     private int $localVerificationTag;
@@ -186,6 +191,9 @@ final class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInt
         $outboundQueue = new SplQueue();
         /** @var SplQueue<DataChunk> $outboundQueue */
         $this->outboundQueue = $outboundQueue;
+
+        /** @var \WeakMap<DataChannelListener, null> */
+        $this->dataChannelListeners = new \WeakMap();
     }
 
     /**
@@ -233,6 +241,24 @@ final class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInt
             return min($this->inboundStreamsCount, $this->outboundStreamsCount);
         }
         return null;
+    }
+
+    /**
+     * Register a listener notified when a remotely-initiated data channel opens.
+     *
+     * Typed replacement for on('datachannel'): the listener is a plain object, captured verbatim
+     * by a serialize cycle rather than through a serializable-closure wrapper.
+     */
+    public function addDataChannelListener(DataChannelListener $listener): void
+    {
+        $this->dataChannelListeners[$listener] = null;
+    }
+
+    private function notifyDataChannel(RTCDataChannel $channel): void
+    {
+        foreach ($this->dataChannelListeners as $listener => $_) {
+            $listener->onDataChannel($channel);
+        }
     }
 
     /**
@@ -1821,9 +1847,14 @@ final class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInt
      */
     public function __serialize(): array
     {
-        return SerializableState::export($this, [
+        $state = SerializableState::export($this, [
             'dataChannelTask' => $this->dataChannelTask !== null,
+            // WeakMap cannot be serialized; snapshot its keys and rebuild on the far side.
+            'dataChannelListeners' => ['__uninitialized' => true],
         ]);
+        $state['__dataChannelListeners'] = SerializableState::weakMapToList($this->dataChannelListeners);
+
+        return $state;
     }
 
     /**
@@ -1831,6 +1862,10 @@ final class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInt
      */
     public function __unserialize(array $data): void
     {
+        /** @var list<DataChannelListener> $dataChannelListeners */
+        $dataChannelListeners = $data['__dataChannelListeners'] ?? [];
+        unset($data['__dataChannelListeners']);
+
         $restart = false;
         /**
          * @var mixed $value
@@ -1842,6 +1877,8 @@ final class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInt
             }
         }
         SerializableState::import($this, $data);
+        /** @var \WeakMap<DataChannelListener, null> */
+        $this->dataChannelListeners = SerializableState::listToWeakMap($dataChannelListeners);
         $this->dataChannelTask = null;
         if ($restart) {
             $this->dataChannelTaskStart();

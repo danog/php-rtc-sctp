@@ -21,8 +21,8 @@ namespace Webrtc\SCTP;
  *
  * The sink is part of the transport's serializable state, so it must be a real, serializable
  * invokable object — never a Closure, which cannot be serialized. Requiring this interface
- * (rather than an arbitrary callable) makes that contract explicit at the type level:
- * {@see \Webrtc\Mixin\BoundMethod} is the canonical implementation.
+ * (rather than an arbitrary callable) makes that contract explicit at the type level: the
+ * consumer implements it on an ordinary object that survives a serialize cycle.
  */
 interface SignalingSinkInterface
 {

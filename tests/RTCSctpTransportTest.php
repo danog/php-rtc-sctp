@@ -12,6 +12,7 @@ use SplQueue;
 use Symfony\Bridge\PhpUnit\ClockMock;
 use Webrtc\DataChannel\Enum\State as DataChannelState;
 use Webrtc\DataChannel\RTCDataChannel;
+use Webrtc\SCTP\Listener\DataChannelListener;
 use Webrtc\DataChannel\RTCDataChannelParameters;
 use Webrtc\Exception\InvalidArgumentException;
 use Webrtc\ICE\Enum\IceRole;
@@ -1953,11 +1954,24 @@ class RTCSctpTransportTest extends TestCase
         return $dataChunks;
     }
 
+    /** @var list<DataChannelListener> Keeps typed listeners alive against the WeakMap registry. */
+    private array $keptDataChannelListeners = [];
+
     private function getTrackChannels(RTCSctpTransport $transport, array &$channels): void
     {
-        $transport->on("datachannel", function (...$args) use (&$channels) {
-            $channels [] = $args[0];
-        });
+        $listener = new class implements DataChannelListener {
+            /** @var array<int, RTCDataChannel> */
+            public $sink;
+
+            public function onDataChannel(RTCDataChannel $channel): void
+            {
+                $this->sink[] = $channel;
+            }
+        };
+        $listener->sink = &$channels;
+        // The registry is a WeakMap, so hold a strong reference for the test's lifetime.
+        $this->keptDataChannelListeners[] = $listener;
+        $transport->addDataChannelListener($listener);
     }
 
     private function outstandingTsns(RTCSctpTransport $transport): array

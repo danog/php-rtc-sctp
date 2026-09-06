@@ -91,7 +91,22 @@ trait DataChannel
             EventLoop::cancel($this->dataChannelTask);
             $this->dataChannelTask = null;
         }
-        $this->dataChannelTask = EventLoop::delay($this->rto, $this->dataChannelTaskExpired(...));
+        $this->armDataChannelTimer();
+    }
+
+    /**
+     * Arm the data-channel retransmission timer without pinning the transport.
+     *
+     * Registering it as $this->dataChannelTaskExpired(...) captures $this strongly and would keep
+     * the event loop holding this SCTP transport alive forever, defeating an unset()+gc cycle.
+     * A weak reference lets the transport be collected; an orphaned timer fires once into nothing.
+     */
+    private function armDataChannelTimer(): void
+    {
+        $weak = \WeakReference::create($this);
+        $this->dataChannelTask = EventLoop::delay($this->rto, static function () use ($weak): void {
+            $weak->get()?->dataChannelTaskExpired();
+        });
     }
 
     /**
@@ -105,7 +120,7 @@ trait DataChannel
             throw new RuntimeException("Datachannel timer already started");
         }
         $this->log(" Datachannel timer started");
-        $this->dataChannelTask = EventLoop::delay($this->rto, $this->dataChannelTaskExpired(...));
+        $this->armDataChannelTimer();
     }
 
     /**
@@ -576,8 +591,8 @@ trait DataChannel
 
                 EventLoop::queue(fn () => $this->dataChannelFlush());
 
-                // Emit event
-                $this->emit("datachannel", [$channel]);
+                // Notify listeners (the peer connection) of the new channel.
+                $this->notifyDataChannel($channel);
             } elseif ($msgType === SctpConstant::DATA_CHANNEL_ACK) {
                 if (!isset($this->dataChannels[$streamId])) {
                     throw new InvalidArgumentException("Data channel with stream ID $streamId does not exist");

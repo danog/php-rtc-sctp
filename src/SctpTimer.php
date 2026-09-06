@@ -69,7 +69,24 @@ final class SctpTimer
         }
         $this->chunk = $chunk;
         $this->log("it started -> chunk: " . \get_class($this->chunk));
-        $this->task = EventLoop::delay($this->transport->getRto(), $this->expired(...));
+        $this->armTimer();
+    }
+
+    /**
+     * Arm the retransmission timer without pinning this object in the event loop.
+     *
+     * Registering the timer as $this->expired(...) would capture $this strongly, and since the
+     * transport holds its timers (and each timer holds the transport back) that strong watcher
+     * would keep the whole SCTP association alive forever — an unset()+gc_collect_cycles() could
+     * never reclaim it. Holding only a weak reference lets the association be collected; a timer
+     * left armed for a collected owner simply fires once into nothing and is removed.
+     */
+    private function armTimer(): void
+    {
+        $weak = \WeakReference::create($this);
+        $this->task = EventLoop::delay($this->transport->getRto(), static function () use ($weak): void {
+            $weak->get()?->expired();
+        });
     }
 
     /**
@@ -107,7 +124,7 @@ final class SctpTimer
                     $this->transport->sendChunk($chunk);
                 });
             }
-            $this->task = EventLoop::delay($this->transport->getRto(), $this->expired(...));
+            $this->armTimer();
         }
         $this->failures++;
     }
@@ -193,7 +210,7 @@ final class SctpTimer
         SerializableState::import($this, $data);
         $this->task = null;
         if ($restart && $this->chunk !== null) {
-            $this->task = EventLoop::delay($this->transport->getRto(), $this->expired(...));
+            $this->armTimer();
         }
     }
 }
