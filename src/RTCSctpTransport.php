@@ -77,8 +77,7 @@ final class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInt
     private State $state = State::CLOSED;
 
     /** When set, incoming user data goes here instead of to the data channel layer. */
-    /** @var object{__invoke(string): void}|null */
-    private ?object $signalingSink = null;
+    private ?SignalingSinkInterface $signalingSink = null;
     private bool $started = false;
 
     // Local variables
@@ -210,13 +209,10 @@ final class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInt
      * incoming user data bypasses the data channel layer entirely.
      */
     /**
-     * @param object{__invoke(string): void}|null $sink A serializable invokable, not a Closure.
+     * @param SignalingSinkInterface|null $sink A serializable invokable object, not a Closure.
      */
-    public function setSignalingSink(?object $sink): void
+    public function setSignalingSink(?SignalingSinkInterface $sink): void
     {
-        if ($sink instanceof \Closure) {
-            throw new InvalidArgumentException('Signaling sink must be a serializable invokable object, not a Closure.');
-        }
         $this->signalingSink = $sink;
     }
 
