@@ -987,7 +987,10 @@ final class RTCSctpTransport implements RTCSctpTransportInterface
     {
         try {
             [, , $verificationTag, $chunks] = SctpPacket::decode($data);
-        } catch (InvalidArgumentException) {
+        } catch (InvalidArgumentException $e) {
+            // Malformed packet (bad length, unpack failure or CRC32c mismatch): drop it, but log
+            // like the bad-verification-tag path below so corruption/interop issues stay visible.
+            $this->log(sprintf("Dropping malformed SCTP packet: %s", $e->getMessage()));
             return;
         }
 
