@@ -47,7 +47,6 @@ use Webrtc\SCTP\Trait\DataChannel;
 use Webrtc\SDP\SctpParameter\RTCSctpCapabilities;
 use Webrtc\Stats\enum\TLSState;
 use Webrtc\Mixin\SerializableState;
-use Evenement\EventEmitter;
 use Psr\Log\LoggerInterface;
 use Random\RandomException;
 use Revolt\EventLoop;
@@ -65,7 +64,7 @@ use function Amp\async;
  * reconfiguration parameters, and forward TSNs. It interacts with the lower-level RTCDtlsTransport and provides a
  * high-level interface for data channels and SCTP signaling.
  */
-final class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
+final class RTCSctpTransport implements RTCSctpTransportInterface
 {
     use DataChannel;
 
@@ -1819,8 +1818,9 @@ final class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInt
                 $this->dataChannelClosed($streamId);
             }
 
-            // Remove all event listeners
-            $this->removeAllListeners();
+            // Release data channel listeners on shutdown.
+            /** @var \WeakMap<DataChannelListener, null> */
+            $this->dataChannelListeners = new \WeakMap();
         }
     }
 

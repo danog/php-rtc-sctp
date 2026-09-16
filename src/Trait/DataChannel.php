@@ -601,17 +601,17 @@ trait DataChannel
                 $channel->setReadyState(DataChannelState::Open);
             }
         } elseif ($ppId === SctpConstant::WEBRTC_STRING && isset($this->dataChannels[$streamId])) {
-            // Emit message for string data
-            $this->dataChannels[$streamId]->emit("message", [$data]);
+            // Deliver message for string data
+            $this->dataChannels[$streamId]->dispatchMessage($data);
         } elseif ($ppId === SctpConstant::WEBRTC_STRING_EMPTY && isset($this->dataChannels[$streamId])) {
-            // Emit empty string message
-            $this->dataChannels[$streamId]->emit("message", [""]);
+            // Deliver empty string message
+            $this->dataChannels[$streamId]->dispatchMessage("");
         } elseif ($ppId === SctpConstant::WEBRTC_BINARY && isset($this->dataChannels[$streamId])) {
-            // Emit binary message
-            $this->dataChannels[$streamId]->emit("message", [$data]);
+            // Deliver binary message
+            $this->dataChannels[$streamId]->dispatchMessage($data);
         } elseif ($ppId === SctpConstant::WEBRTC_BINARY_EMPTY && isset($this->dataChannels[$streamId])) {
-            // Emit empty binary message
-            $this->dataChannels[$streamId]->emit("message", [""]);
+            // Deliver empty binary message
+            $this->dataChannels[$streamId]->dispatchMessage("");
         }
     }
 
