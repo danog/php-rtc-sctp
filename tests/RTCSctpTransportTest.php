@@ -810,6 +810,40 @@ class RTCSctpTransportTest extends TestCase
     }
 
     /**
+     * Regression: a malformed packet used to be dropped silently; it must now be logged like the
+     * adjacent bad-verification-tag path so corruption/interop issues stay diagnosable.
+     *
+     * @throws RandomException
+     * @throws SctpException
+     */
+    public function testGarbageIsLogged()
+    {
+        [, $server] = $this->createSctpTransport();
+
+        $logger = new class extends \Psr\Log\AbstractLogger {
+            /** @var list<string> */
+            public array $messages = [];
+
+            public function log($level, string|\Stringable $message, array $context = []): void
+            {
+                $this->messages[] = (string) $message;
+            }
+        };
+        $server->setLogger($logger);
+
+        $server->start(5000);
+        $this->asyncSleep(.01);
+        $server->onReceived("garbage");
+
+        $this->assertNotEmpty(
+            array_filter($logger->messages, static fn (string $m) => str_contains($m, "Dropping malformed SCTP packet")),
+            "expected a log entry for the dropped malformed packet"
+        );
+
+        $server->stop();
+    }
+
+    /**
      * @throws RandomException
      * @throws SctpException
      */
