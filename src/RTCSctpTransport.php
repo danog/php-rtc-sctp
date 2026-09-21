@@ -162,6 +162,9 @@ final class RTCSctpTransport implements RTCSctpTransportInterface
      * @throws SctpException If the DTLS transport is closed.
      * @throws RandomException If a random generation fails.
      */
+    /** @var bool|null Explicit association role (see {@see self::setClientRole()}), null follows the ICE role. */
+    private ?bool $clientRole = null;
+
     public function __construct(private RTCSctpDtlsTransportInterface $transport, readonly private int $localPort = 5000)
     {
         if ($transport->getState() == TLSState::CLOSED) {
@@ -267,7 +270,25 @@ final class RTCSctpTransport implements RTCSctpTransportInterface
      */
     public function isServer(): bool
     {
+        if ($this->clientRole !== null) {
+            return !$this->clientRole;
+        }
         return $this->transport->getIceTransport()->getRole() != IceRole::Controlling;
+    }
+
+    /**
+     * Force the association role instead of deriving it from the ICE role.
+     *
+     * The client sends the INIT (and, by convention, opens the data channels); the server waits for
+     * it. WebRTC ties this to the ICE role, but an in-band SCTP association set up outside SDP (the
+     * way tgcalls runs its call and group-call data channels) may need the opposite: a group call
+     * client is ICE-controlled yet must initiate the association towards the SFU.
+     *
+     * @param bool|null $client true to act as client, false as server, null to follow the ICE role.
+     */
+    public function setClientRole(?bool $client): void
+    {
+        $this->clientRole = $client;
     }
 
     /**
