@@ -520,7 +520,13 @@ trait DataChannel
         $data .= $channel->getLabel();
         $data .= $channel->getProtocol();
         $this->dataChannelQueue->enqueue([$channel, SctpConstant::WEBRTC_DCEP, $data]);
-        EventLoop::queue(fn () => $this->dataChannelFlush());
+        // Before the association exists the queued callback cannot send anything, and on the
+        // Windows PHP 8.4 runner it is enough to stall the DTLS handshake that connect() has
+        // also queued. Flush now only once the association is up; setState(ESTABLISHED) flushes
+        // whatever is still queued.
+        if ($this->state === State::ESTABLISHED) {
+            EventLoop::queue(fn () => $this->dataChannelFlush());
+        }
     }
 
     /**
