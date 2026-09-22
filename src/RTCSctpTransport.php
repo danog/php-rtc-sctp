@@ -354,15 +354,9 @@ final class RTCSctpTransport implements RTCSctpTransportInterface
             $this->remotePort = $remotePort;
             $this->dataChannelId = \intval(!$this->isServer());
             $this->transport->setSctpReceiver($this);
-        }
-
-        // start() is idempotent for the server, which registers itself before the DTLS handshake.
-        // That first call can observe the default ICE role (controlled, so "server") and then
-        // refuse to send an INIT once the agent is actually controlling. init() leaves COOKIE_WAIT,
-        // so a later call sends the INIT exactly once.
-        if (!$this->isServer() && $this->state === State::CONNECTING) {
-            $this->dataChannelId = 1;
-            $this->init();
+            if (!$this->isServer()) {
+                $this->init();
+            }
         }
     }
 
