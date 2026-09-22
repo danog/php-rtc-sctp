@@ -381,18 +381,9 @@ trait DataChannel
                 }
 
             } else {
-                /** @var SplQueue<array{0: RTCDataChannel, 1: int, 2: string}> $newQueue */
-                $newQueue = new SplQueue;
-
-                while (!$this->dataChannelQueue->isEmpty()) {
-                    $queueItem = $this->dataChannelQueue->dequeue();
-                    if ($queueItem[0] !== $channel) {
-                        $newQueue->enqueue($queueItem);
-                    }
-                }
-
-                $this->dataChannelQueue = $newQueue;
-
+                // No stream id yet, so there is nothing to reset. Leave the queued OPEN for
+                // flush to skip; rebuilding the queue here has dropped the sibling channel's
+                // OPEN on the Windows PHP 8.4 runner.
                 $id = $channel->getId();
                 if ($id !== null) {
                     unset($this->dataChannels[$id]);
@@ -429,6 +420,10 @@ trait DataChannel
 
         while (!$this->dataChannelQueue->isEmpty() && $this->outboundQueue->isEmpty()) {
             [$channel, $protocol, $userData] = $this->dataChannelQueue->dequeue();
+
+            if (\in_array($channel->getReadyState(), [DataChannelState::Closing, DataChannelState::Closed], true)) {
+                continue;
+            }
 
             $streamId = $channel->getId();
             if ($streamId === null) {
