@@ -142,6 +142,17 @@ final class RTCSctpTransport implements RTCSctpTransportInterface
     /** @var int[] */
     private array $reconfigQueue = [];
     private ?StreamParamInterface $reconfigRequest = null; // Type depends on implementation
+    /**
+     * The streams of which only one direction was reset yet: by the peer (incoming) or by us (outgoing).
+     *
+     * A stream is only closed once both are (RFC 8831 6.7): before, the peer may still send on it, so its id can't be
+     * used by another data channel.
+     *
+     * @var array<int, true>
+     */
+    private array $incomingStreamsReset = [];
+    /** @var array<int, true> */
+    private array $outgoingStreamsReset = [];
     private int $reconfigRequestSeq;
     private int $reconfigResponseSeq = 0;
 
@@ -1709,12 +1720,17 @@ final class RTCSctpTransport implements RTCSctpTransportInterface
             // Mark closed inbound streams
             foreach ($param->getStreams() as $streamId) {
                 unset($this->inboundStreams[$streamId]);
+                $this->incomingStreamsReset[$streamId] = true;
 
-                // Close data channel
+                // Close the data channel, resetting our direction of the stream too: the peer waits for it.
                 $channel = $this->dataChannels[$streamId] ?? null;
                 if ($channel) {
                     $this->dataChannelClose($channel);
+                } elseif (!isset($this->outgoingStreamsReset[$streamId]) && !$this->isStreamResetPending($streamId)) {
+                    $this->reconfigQueue[] = $streamId;
+                    $this->transmitReconfig();
                 }
+                $this->streamResetProgressed($streamId);
             }
 
             // Send response
@@ -1743,15 +1759,36 @@ final class RTCSctpTransport implements RTCSctpTransportInterface
                 $param->getResponseSequence() == $this->reconfigRequest->getRequestSequence()
             ) {
                 // Mark closed streams
-                foreach ($this->reconfigRequest->getStreams() as $streamId) {
+                $streams = $this->reconfigRequest->getStreams();
+                $this->reconfigRequest = null;
+                foreach ($streams as $streamId) {
                     unset($this->outboundStreamSeq[$streamId]);
-
-                    $this->dataChannelClosed($streamId);
+                    $this->outgoingStreamsReset[$streamId] = true;
+                    $this->streamResetProgressed($streamId);
                 }
 
-                $this->reconfigRequest = null;
                 $this->transmitReconfig();
             }
+        }
+    }
+
+    /**
+     * Whether a reset of our direction of a stream is queued or awaiting the peer's response.
+     */
+    private function isStreamResetPending(int $streamId): bool
+    {
+        return \in_array($streamId, $this->reconfigQueue, true)
+            || ($this->reconfigRequest instanceof StreamResetOutgoingParam && \in_array($streamId, $this->reconfigRequest->getStreams(), true));
+    }
+
+    /**
+     * Closes the data channel of a stream once both of its directions are reset.
+     */
+    private function streamResetProgressed(int $streamId): void
+    {
+        if (isset($this->incomingStreamsReset[$streamId], $this->outgoingStreamsReset[$streamId])) {
+            unset($this->incomingStreamsReset[$streamId], $this->outgoingStreamsReset[$streamId]);
+            $this->dataChannelClosed($streamId);
         }
     }
 

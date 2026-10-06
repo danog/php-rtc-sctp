@@ -34,6 +34,7 @@ use Webrtc\SCTP\Enum\State;
 use Webrtc\SCTP\Exception\SctpException;
 use Webrtc\SCTP\InboundStream;
 use Webrtc\SCTP\Param\StreamAddOutgoingParam;
+use Webrtc\SCTP\Param\StreamResetOutgoingParam;
 use Webrtc\SCTP\Param\StreamResetResponseParam;
 use Webrtc\SCTP\RTCSctpTransport;
 use Webrtc\SCTP\SctpConstant;
@@ -1848,6 +1849,75 @@ class RTCSctpTransportTest extends TestCase
         $this->assertEquals(11, $client->getTimer2()->getFailures());
         $this->assertNull($client->getTimer2()->getTask());
         $this->assertEquals(State::CLOSED, $client->getState());
+    }
+
+    /**
+     * An established transport, with an open negotiated data channel on stream 3.
+     *
+     * @return array{RTCSctpTransport, RTCDataChannel}
+     */
+    private function transportWithChannel(): array
+    {
+        $transport = new RTCSctpTransport($this->createDtlsTransportMock(true));
+        $channel = new RTCDataChannel($transport, new RTCDataChannelParameters("chat", negotiated: true, id: 3));
+        $transport->setState(State::ESTABLISHED);
+        $this->assertSame(DataChannelState::Open, $channel->getReadyState());
+        return [$transport, $channel];
+    }
+
+    private static function pendingReset(RTCSctpTransport $transport): ?StreamResetOutgoingParam
+    {
+        // The request is queued for the next tick.
+        $request = (new \ReflectionProperty(RTCSctpTransport::class, 'reconfigRequest'))->getValue($transport);
+        return $request instanceof StreamResetOutgoingParam ? $request : null;
+    }
+
+    public function testClosedOnceBothDirectionsOfTheStreamAreReset(): void
+    {
+        [$transport, $channel] = $this->transportWithChannel();
+
+        $channel->close();
+        $request = self::pendingReset($transport);
+        $this->assertNotNull($request);
+        $this->assertSame([3], $request->getStreams());
+        $transport->receiveReconfigParam(new StreamResetResponseParam($request->getRequestSequence(), 1));
+
+        // Only our direction is reset: the peer may still send on the stream, so it can't be used by another channel.
+        $this->assertSame(DataChannelState::Closing, $channel->getReadyState());
+        // The next id it would pick is the one of the stream.
+        (new \ReflectionProperty(RTCSctpTransport::class, 'dataChannelId'))->setValue($transport, 3);
+        $other = new RTCDataChannel($transport, new RTCDataChannelParameters("other"));
+        $this->asyncSleep(.01);
+        $this->assertNotSame(3, $other->getId());
+
+        $transport->receiveReconfigParam(new StreamResetOutgoingParam(requestSequence: 1, responseSequence: 0, lastTsn: 0, streams: [3]));
+        $this->assertSame(DataChannelState::Closed, $channel->getReadyState());
+    }
+
+    public function testClosedByThePeer(): void
+    {
+        [$transport, $channel] = $this->transportWithChannel();
+
+        // The peer closes the channel: our direction of the stream is reset in turn.
+        $transport->receiveReconfigParam(new StreamResetOutgoingParam(requestSequence: 1, responseSequence: 0, lastTsn: 0, streams: [3]));
+        $this->assertSame(DataChannelState::Closing, $channel->getReadyState());
+        $request = self::pendingReset($transport);
+        $this->assertNotNull($request);
+        $this->assertSame([3], $request->getStreams());
+
+        $transport->receiveReconfigParam(new StreamResetResponseParam($request->getRequestSequence(), 1));
+        $this->assertSame(DataChannelState::Closed, $channel->getReadyState());
+    }
+
+    public function testResetOfAStreamWithoutChannel(): void
+    {
+        [$transport] = $this->transportWithChannel();
+
+        // The peer waits for both directions to be reset: ours is, even if no channel uses the stream here.
+        $transport->receiveReconfigParam(new StreamResetOutgoingParam(requestSequence: 1, responseSequence: 0, lastTsn: 0, streams: [5]));
+        $request = self::pendingReset($transport);
+        $this->assertNotNull($request);
+        $this->assertSame([5], $request->getStreams());
     }
 
     public function testDataChannelTimerExpired()
