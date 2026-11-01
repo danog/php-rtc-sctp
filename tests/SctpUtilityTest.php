@@ -64,4 +64,25 @@ class SctpUtilityTest extends TestCase
         $this->assertFalse(SctpUtility::uint32Gte(2147483649, 1));
         $this->assertFalse(SctpUtility::uint32Gte(4294967295, 1));
     }
+
+    /** The CRC-32C of RFC 3309 (SCTP), as computed byte by byte before the hash extension's was used. */
+    public function testCrc32cMatchesTheReferenceImplementation(): void
+    {
+        $reference = static function (string $data): int {
+            $crc = 0xFFFFFFFF;
+            for ($i = 0, $len = \strlen($data); $i < $len; $i++) {
+                $crc ^= \ord($data[$i]);
+                for ($k = 0; $k < 8; $k++) {
+                    $crc = $crc & 1 ? 0x82F63B78 ^ ($crc >> 1) : $crc >> 1;
+                }
+            }
+            return $crc ^ 0xFFFFFFFF;
+        };
+        // The check value of CRC-32C
+        self::assertSame(0xE3069283, SctpUtility::crc32c('123456789'));
+        foreach ([0, 1, 3, 12, 100, 1200, 65536] as $size) {
+            $data = $size ? random_bytes($size) : '';
+            self::assertSame($reference($data), SctpUtility::crc32c($data), "$size bytes");
+        }
+    }
 }

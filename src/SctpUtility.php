@@ -187,28 +187,9 @@ final class SctpUtility
      */
     public static function crc32c(string $data): int
     {
-        /** @var array<int, int> $table */
-        static $table;
-        if (!$table) {
-            for ($n = 0; $n < 256; $n++) {
-                $c = $n;
-                for ($k = 0; $k < 8; $k++) {
-                    if ($c & 1) {
-                        $c = 0x82F63B78 ^ ($c >> 1);
-                    } else {
-                        $c >>= 1;
-                    }
-                }
-                $table[$n] = $c;
-            }
-        }
-
-        $crc = 0xFFFFFFFF;
-        for ($i = 0, $len = \strlen($data); $i < $len; $i++) {
-            $crc = $table[($crc ^ \ord($data[$i])) & 0xFF] ^ ($crc >> 8);
-        }
-
-        return $crc ^ 0xFFFFFFFF;
+        // The hash extension's CRC-32C (in C, instead of a PHP loop over every byte), big-endian
+        $crc = hash('crc32c', $data, true);
+        return \ord($crc[0]) << 24 | \ord($crc[1]) << 16 | \ord($crc[2]) << 8 | \ord($crc[3]);
     }
 
     /**
