@@ -13,6 +13,8 @@ namespace Webrtc\SCTP;
 
 
 
+use danog\MadelineProto\Native\Crypto;
+use danog\MadelineProto\Native\Hmac;
 use Override;
 use Webrtc\DataChannel\Enum\State as DataChannelState;
 use Webrtc\DataChannel\RTCDataChannel;
@@ -1574,9 +1576,17 @@ final class RTCSctpTransport implements RTCSctpTransportInterface
 
         // Generate state cookie
         $cookie = pack("N", $this->getTime());
-        $cookie .= hash_hmac("sha1", $cookie, $this->hmacKey, true);
+        $cookie .= $this->cookieMac($cookie);
         $ack->addParams([[SctpConstant::SCTP_STATE_COOKIE, $cookie]]);
         $this->sendChunk($ack);
+    }
+
+    /** The HMAC-SHA1 of a state cookie: with madeline_crypto 0.5+, if loaded. */
+    private function cookieMac(string $timestamp): string
+    {
+        return \extension_loaded('madeline_crypto') && version_compare(Crypto::version(), '0.5.0', '>=')
+            ? Hmac::compute('sha1', $this->hmacKey, $timestamp)
+            : hash_hmac("sha1", $timestamp, $this->hmacKey, true);
     }
 
     /**
@@ -1596,7 +1606,7 @@ final class RTCSctpTransport implements RTCSctpTransportInterface
         $cookie = $chunk->getBody();
         if (
             \strlen($cookie) != SctpConstant::COOKIE_LENGTH ||
-            hash_hmac("sha1", substr($cookie, 0, 4), $this->hmacKey, true) != substr($cookie, 4)
+            !hash_equals($this->cookieMac(substr($cookie, 0, 4)), substr($cookie, 4))
         ) {
             $this->log("x State cookie is invalid");
 
