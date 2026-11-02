@@ -1581,10 +1581,13 @@ final class RTCSctpTransport implements RTCSctpTransportInterface
         $this->sendChunk($ack);
     }
 
+    /** Whether madeline_crypto 0.5+ is loaded (null: not checked yet). */
+    private static ?bool $nativeCrypto = null;
+
     /** The HMAC-SHA1 of a state cookie: with madeline_crypto 0.5+, if loaded. */
     private function cookieMac(string $timestamp): string
     {
-        return \extension_loaded('madeline_crypto') && version_compare(Crypto::version(), '0.5.0', '>=')
+        return (self::$nativeCrypto ??= \extension_loaded('madeline_crypto') && version_compare(Crypto::version(), '0.5.0', '>='))
             ? Hmac::compute('sha1', $this->hmacKey, $timestamp)
             : hash_hmac("sha1", $timestamp, $this->hmacKey, true);
     }
